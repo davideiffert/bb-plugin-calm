@@ -1,0 +1,96 @@
+.calm-settings { display: flex; flex-direction: column; gap: 20px; color: var(--muted-foreground); container-type: inline-size; }
+.calm-tiles { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@container (min-width: 620px) { .calm-tiles { grid-template-columns: repeat(3, 1fr); } }
+.calm-tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--canvas); color: var(--foreground); text-align: left; cursor: pointer; }
+.calm-tile:hover { background: var(--surface-recessed); }
+.calm-tile[aria-pressed="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.calm-tile:focus-visible, .calm-segment:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.calm-tile-wide { grid-column: 1 / -1; }
+.calm-tile-name { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 14px; }
+.calm-tile-check { color: var(--primary); }
+.calm-tile-caption { font-size: 12px; color: var(--muted-foreground); }
+.calm-preview { position: relative; display: block; width: 100%; min-width: 0; overflow: hidden; }
+.calm-preview .calm-sky { top: 0; }
+.calm-trio { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.calm-trio > .calm-preview { flex: 1; }
+@container (min-width: 620px) { .calm-trio { flex-direction: row; gap: 10px; } }
+.calm-evening { display: flex; flex-direction: column; gap: 10px; }
+.calm-heading { font-weight: 600; font-size: 14px; color: var(--foreground); }
+.calm-sub { font-size: 13px; }
+.calm-segments { display: inline-flex; align-self: flex-start; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-recessed); }
+.calm-segment { min-width: 72px; padding: 5px 12px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground); font-size: 13px; cursor: pointer; }
+.calm-segment[aria-checked="true"] { background: var(--canvas); color: var(--foreground); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
+.calm-dusk { display: flex; flex-direction: column; gap: 4px; }
+.calm-dusk canvas { display: block; width: 100%; height: 36px; border-radius: 4px; }
+.calm-dusk-labels { display: flex; justify-content: space-between; font-size: 12px; }
+.calm-status { min-height: 1em; margin: 0; font-size: 12px; }
+.calm-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.calm-tip { position: absolute; top: 3px; display: flex; flex-direction: column; gap: 1px; max-width: calc(100% - 8px); padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--popover, var(--canvas)); color: var(--muted-foreground); font-size: 11px; line-height: 14px; white-space: nowrap; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.calm-tip-main { color: var(--foreground); font-weight: 600; }
+/* The strip's layers: a faint ambient glow, the pixel canvas scaled up
+   crisply, and page text for labels. The glow has no edges: it spans the
+   whole chat pane (bb's scrolling pane clips it at the pane's own edges), rises gently
+   from nothing at the top to its peak just above the ground line and fades
+   to nothing again below it, with no side fades, so it reads as atmosphere. */
+.calm-sky { position: absolute; top: calc(-1 * var(--calm-sky-reach, 32px)); bottom: 0; left: 50%; width: 100vw; transform: translateX(-50%); pointer-events: none; }
+/* The band shape needs a mask for its soft top and bottom; ellipses fade on their own. */
+.calm-sky[data-shape="linear"] {
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.05) 25%, rgba(0,0,0,0.2) 45%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.75) 72%, rgba(0,0,0,1) 82%, rgba(0,0,0,0.6) 91%, rgba(0,0,0,0) 100%);
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.05) 25%, rgba(0,0,0,0.2) 45%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.75) 72%, rgba(0,0,0,1) 82%, rgba(0,0,0,0.6) 91%, rgba(0,0,0,0) 100%); }
+.calm-canvas { position: relative; display: block; image-rendering: pixelated; }
+.calm-labels { position: absolute; inset: 0; pointer-events: none; }
+.calm-labels > span { position: absolute; white-space: nowrap; color: var(--muted-foreground); }
+.calm-cycle { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.calm-cycle-dots { display: flex; gap: 12px; font-size: 11px; color: var(--muted-foreground); }
+.calm-cycle-dots > span::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: var(--border); vertical-align: 1px; }
+.calm-cycle-dots > span.on { color: var(--foreground); }
+.calm-cycle-dots > span.on::before { background: var(--primary); }
+.calm-cycle-step { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.calm-cycle-step > .calm-preview { flex: 1; }
+.calm-cycle-arrow { color: var(--muted-foreground); font-size: 12px; }
+/* The helper alert: a half-height mini scene with quiet words beside it.
+   The whole row opens the helper. */
+.calm-alert { display: flex; align-items: center; gap: 10px; width: 100%; height: 26px; padding: 0 4px; min-width: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground); text-align: left; cursor: pointer; }
+.calm-alert:hover { background: var(--surface-recessed); }
+.calm-alert:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.calm-alert-art { display: block; flex: none; image-rendering: pixelated; }
+.calm-alert-more { flex: none; margin-left: -4px; font: 600 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.calm-alert-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; opacity: 0.8; }
+.calm-alert-wait .calm-alert-text { color: #a3701c; }
+.calm-alert-wait.calm-alert-dark .calm-alert-text { color: #d9a24a; }
+.calm-alert:hover .calm-alert-text { opacity: 1; }
+/* The canvas and labels stay clipped to the strip while it eases open or shut;
+   the sky may reach a little above it. */
+.calm-clip { position: absolute; inset: 0; overflow: hidden; }
+/* Above the strip, chat text scrolling down dissolves into the page color
+   instead of being cut where bb's prompt area begins. It sits beneath bb's
+   own controls (z-index -1 inside the prompt area's layer) and never takes
+   clicks; if a future bb clips it, the strip simply looks as before. */
+.calm-veil { position: absolute; left: 0; right: 0; bottom: 100%; height: var(--calm-veil, 28px); z-index: -1; pointer-events: none;
+  background: var(--background, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000); mask-image: linear-gradient(to bottom, transparent, #000); }
+/* The features list on the settings page. */
+.calm-features { display: flex; flex-direction: column; gap: 10px; }
+.calm-feature { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.calm-feature input { margin-top: 3px; accent-color: var(--primary); }
+.calm-feature-text { display: flex; flex-direction: column; }
+.calm-feature-name { font-size: 13px; color: var(--foreground); }
+.calm-feature-sub { font-size: 12px; }
+/* The home screen section. */
+.calm-home { display: flex; flex-direction: column; gap: 6px; }
+.calm-home-line { margin: 0; font-size: 12px; }
+/* The thread header control: one 28px button, and a small panel below it. */
+.calm-head { position: relative; display: flex; align-items: center; }
+.calm-head-button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+.calm-head-button:hover, .calm-head-button[aria-expanded="true"] { background: var(--surface-recessed); }
+.calm-head-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.calm-head-off .calm-head-art { opacity: 0.35; filter: grayscale(1); }
+.calm-head-art { width: auto; height: 14px; image-rendering: pixelated; }
+.calm-head-panel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; display: flex; flex-direction: column; gap: 10px; min-width: 220px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--popover, var(--canvas)); color: var(--foreground); font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.calm-head-group { display: flex; flex-direction: column; gap: 6px; }
+.calm-head-heading { font-size: 12px; color: var(--muted-foreground); }
+.calm-head-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.calm-head-row input { accent-color: var(--primary); }
+.calm-head-row .calm-head-art { height: 12px; }
+.calm-head-dim { color: var(--muted-foreground); }
+.calm-head-error { margin: 0; font-size: 12px; color: var(--destructive, #d33); }

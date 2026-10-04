@@ -1,0 +1,38 @@
+{
+  "name": "bb-plugin-calm",
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "bb": ">=0.45",
+    "bbPluginSdk": ">=0.6.15"
+  },
+  "bb": {
+    "name": "Calm",
+    "description": "Calm pixel-art scenes above the prompt box that show what your agent is doing at a glance.",
+    "branding": {
+      "icon": "Coffee"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.15",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "hono": "^4.13.12",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.7"
+  },
+  "description": "Calm pixel-art scenes above the prompt box that show what your agent is doing at a glance.",
+  "license": "MIT",
+  "scripts": {
+    "build": "bb plugin build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  }
+}
