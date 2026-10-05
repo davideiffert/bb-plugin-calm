@@ -8,12 +8,15 @@ export interface CrewMember {
   title: string;
   /** When the child's current run started (epoch ms), if known. */
   since?: number | null;
+  /** A failed helper you have already opened: no alert for it. */
+  dismissed?: boolean;
 }
 
 /** Kinds that keep a child on its parent's strip. */
 export const ON_STRIP: ReadonlySet<MoodKind> = new Set(["working", "waiting", "rate", "error"]);
 
-const COLORS = ["#e5484d", "#3e9ced", "#f5a524", "#30a46c", "#8e4ec6", "#e93d82"];
+/** Helper colors. Never amber: amber means "needs you" (see src/kit/style.ts). */
+export const COLORS = ["#e5484d", "#3e9ced", "#12a5a0", "#30a46c", "#8e4ec6", "#e93d82"];
 
 /** A stable tag color for a child thread. */
 export function crewColor(id: string): string {
@@ -39,12 +42,12 @@ export interface HelperAlert {
   members: CrewMember[];
 }
 
-/** A failed helper stays on the alert until you open it (or it runs again). */
+/** A failed helper stays on the alert until you open it (or it runs again). The server keeps opened ones as `dismissed`; this key covers the moment between a tap and the server's answer. */
 export const failureKey = (m: CrewMember) => `${m.id}:${m.since ?? ""}`;
 
 export function helperAlert(crew: readonly CrewMember[], seenFailures: ReadonlySet<string> = new Set()): HelperAlert | null {
   const waiting = crew.filter((c) => c.kind === "waiting");
-  const failed = crew.filter((c) => c.kind === "error" && !seenFailures.has(failureKey(c)));
+  const failed = crew.filter((c) => c.kind === "error" && !c.dismissed && !seenFailures.has(failureKey(c)));
   if (waiting.length === 0 && failed.length === 0) return null;
   const parts: string[] = [];
   const helpers = (n: number) => `${n} ${n === 1 ? "helper" : "helpers"}`;

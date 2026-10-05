@@ -8,8 +8,9 @@ import { useEffect, useRef, type MouseEvent, type PointerEvent } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { runOnClock } from "./clock";
 import type { CrewMember, HelperAlert } from "./crew";
-import { MAX_FIGURES, VIGNETTE_ROWS, VIGNETTE_SCALE, Vignette } from "./helper-vignette";
-import type { ThemeMode } from "./scenes/types";
+import { AlertScene, MAX_FIGURES, VIGNETTE_ROWS, VIGNETTE_SCALE } from "./kit/alert";
+import { sceneFor } from "./scenes";
+import type { ThemeMode } from "./kit/types";
 
 export const ALERT_HEIGHT = VIGNETTE_ROWS * VIGNETTE_SCALE;
 
@@ -18,8 +19,8 @@ export function HelperAlertRow({ alert, sceneId, theme, reduced, onOpen }: {
 }) {
   const navigate = useBbNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const vignette = useRef<Vignette | null>(null);
-  if (!vignette.current || vignette.current.sceneId !== sceneId) vignette.current = new Vignette(sceneId);
+  const vignette = useRef<AlertScene | null>(null);
+  if (!vignette.current || vignette.current.sceneId !== sceneId) vignette.current = new AlertScene(sceneId, sceneFor("", sceneId).alert);
   const v = vignette.current;
   v.set(alert.members);
   const membersKey = alert.members.map((m) => `${m.id}:${m.kind}`).join(",");

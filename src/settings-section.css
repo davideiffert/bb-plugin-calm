@@ -1,6 +1,6 @@
 .calm-settings { display: flex; flex-direction: column; gap: 20px; color: var(--muted-foreground); container-type: inline-size; }
 .calm-tiles { display: grid; grid-template-columns: 1fr; gap: 10px; }
-@container (min-width: 620px) { .calm-tiles { grid-template-columns: repeat(3, 1fr); } }
+@container (min-width: 440px) { .calm-tiles { grid-template-columns: 1fr 1fr; } }
 .calm-tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--canvas); color: var(--foreground); text-align: left; cursor: pointer; }
 .calm-tile:hover { background: var(--surface-recessed); }
 .calm-tile[aria-pressed="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
@@ -76,9 +76,6 @@
 .calm-feature-text { display: flex; flex-direction: column; }
 .calm-feature-name { font-size: 13px; color: var(--foreground); }
 .calm-feature-sub { font-size: 12px; }
-/* The home screen section. */
-.calm-home { display: flex; flex-direction: column; gap: 6px; }
-.calm-home-line { margin: 0; font-size: 12px; }
 /* The thread header control: one 28px button, and a small panel below it. */
 .calm-head { position: relative; display: flex; align-items: center; }
 .calm-head-button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
@@ -86,7 +83,7 @@
 .calm-head-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 .calm-head-off .calm-head-art { opacity: 0.35; filter: grayscale(1); }
 .calm-head-art { width: auto; height: 14px; image-rendering: pixelated; }
-.calm-head-panel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; display: flex; flex-direction: column; gap: 10px; min-width: 220px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--popover, var(--canvas)); color: var(--foreground); font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.calm-head-panel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; display: flex; flex-direction: column; gap: 10px; min-width: 220px; max-height: 70vh; max-height: 70dvh; overflow-y: auto; overscroll-behavior: contain; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--popover, var(--canvas)); color: var(--foreground); font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
 .calm-head-group { display: flex; flex-direction: column; gap: 6px; }
 .calm-head-heading { font-size: 12px; color: var(--muted-foreground); }
 .calm-head-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
@@ -94,3 +91,22 @@
 .calm-head-row .calm-head-art { height: 12px; }
 .calm-head-dim { color: var(--muted-foreground); }
 .calm-head-error { margin: 0; font-size: 12px; color: var(--destructive, #d33); }
+/* The scene grid: two columns in bb's settings pane, four on a wide page. */
+.calm-heading-row { display: flex; justify-content: space-between; gap: 8px; margin-top: -8px; }
+.calm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@container (min-width: 760px) { .calm-grid { grid-template-columns: repeat(4, 1fr); } }
+.calm-scene { position: relative; min-width: 0; }
+.calm-scene-pick { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--canvas); color: var(--foreground); text-align: left; cursor: pointer; }
+.calm-scene-pick:hover { background: var(--surface-recessed); }
+.calm-scene-pick[aria-pressed="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.calm-scene-pick:focus-visible, .calm-mix:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.calm-scene-name { font-weight: 600; font-size: 13px; padding-right: 30px; }
+.calm-scene-caption { font-size: 11px; color: var(--muted-foreground); line-height: 1.35; }
+.calm-mix { position: absolute; top: 1px; right: 1px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--primary); font-size: 11px; cursor: pointer; }
+.calm-mix:hover { background: var(--surface-recessed); }
+.calm-mix[aria-checked="false"] { color: var(--muted-foreground); }
+.calm-mix:disabled { cursor: default; opacity: 0.6; }
+.calm-cycle-now { font-size: 11px; color: var(--muted-foreground); }
+/* The strip takes keyboard focus to show its details; show where focus is. */
+.calm-strip:focus { outline: none; }
+.calm-strip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }

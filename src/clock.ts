@@ -3,7 +3,7 @@
 // moves, 15 fps for gentle changes (twinkling, rain, a blinking lantern), and
 // only a check every 30 seconds when nothing changes. Hidden pages and strips
 // that are out of sight get no frames at all.
-import type { Motion } from "./scenes/common";
+import type { Motion } from "./kit/common";
 
 const FAST_MS = 1000 / 30;
 const SLOW_MS = 1000 / 15;

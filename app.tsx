@@ -4,7 +4,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import {
   definePluginApp,
-  experimental_useCodeTheme,
   useComposer,
   useRealtime,
   useRealtimeConnectionState,
@@ -15,21 +14,23 @@ import { failureKey, helperAlert, type CrewMember } from "./src/crew";
 import { IDLE, type Mood } from "./src/mood";
 import { sceneFor } from "./src/scenes";
 import { guessRun, isStale, lockScene, type SceneLock } from "./src/scene-lock";
-import { SCALE, SKY_REACH, beginFrame, endFrame, formatTime, type Label } from "./src/scenes/common";
+import { GagClock, SCALE, SKY_REACH, SurpriseClock, beginFrame, endFrame, formatTime, type Label } from "./src/kit/common";
+import { optionalSlot, useThemeMode } from "./src/compat";
 import { runOnClock } from "./src/clock";
 import { GlowLayer } from "./src/glow";
 import { useReducedMotion } from "./src/motion";
 import { usePrefs, useThreadPrefs } from "./src/use-prefs";
-import { CalmHome } from "./src/home-section";
 import { CalmHeaderControl } from "./src/header-control";
 import { CalmSettings } from "./src/settings-section";
 import { ALERT_HEIGHT, HelperAlertRow } from "./src/crew-alert";
 import "./src/settings-section.css";
-import type { Hit, ThemeMode } from "./src/scenes/types";
+import type { Hit, ThemeMode } from "./src/kit/types";
 
 const EASE_MS = 180;      // the strip opens and closes this fast, so the prompt box eases
-const TAP_TIP_MS = 4000;
-const WATCH_RENEW_MS = 5 * 60_000;  // the server stops counting a thread's steps 12 minutes after the last renewal  // how long a tapped tooltip stays on a touch screen
+const TAP_TIP_MS = 4000;              // how long a tapped tooltip stays on a touch screen
+const WATCH_RENEW_MS = 5 * 60_000;    // the server stops counting a thread's steps 12 minutes after the last renewal
+/** A "working" strip whose composer says nothing is running for this long has missed its run-ended event. */
+const MISSED_END_MS = 10_000;
 
 interface ThreadState { mood: Mood; steps: number; crew: CrewMember[] }
 
@@ -117,14 +118,30 @@ function syncLabels(host: HTMLElement, labels: readonly Label[]) {
     const ty = l.anchor === "bottom" ? "-100%" : l.anchor === "baseline" ? "-80%" : "0";
     const css = `left:${l.x.toFixed(1)}px;top:${l.y.toFixed(1)}px;transform:translate(${tx},${ty});` +
       `font:${l.weight} ${l.size}px ${l.mono ? "ui-monospace,SFMono-Regular,Menlo,monospace" : "ui-sans-serif,system-ui,sans-serif"};` +
-      `opacity:${l.alpha.toFixed(2)}`;
+      `opacity:${l.alpha.toFixed(2)}` +
+      (l.plate ? ";padding:1px 5px;border-radius:4px;background:var(--background, #fff);color:var(--muted-foreground)" : "");
     if (el.dataset.css !== css) { el.style.cssText = css; el.dataset.css = css; }
     if (el.textContent !== l.text) el.textContent = l.text;
   });
 }
 
-/** Failed helpers you have already opened, so their alert goes away. */
+/** Failed helpers just opened from the alert, until the server confirms them as dismissed. */
 const seenFailures = new Set<string>();
+/**
+ * Each thread's rare-surprise timing, kept across runs and scene changes so
+ * "about once in a long session" holds even when every run brings a new scene.
+ */
+const surpriseClocks = new Map<string, SurpriseClock>();
+/** Each thread's gag timing and rotation, kept the same way. */
+const gagClocks = new Map<string, GagClock>();
+function clockFor<T>(clocks: Map<string, T>, threadId: string, make: () => T): T {
+  let c = clocks.get(threadId);
+  if (!c) {
+    clocks.set(threadId, (c = make()));
+    while (clocks.size > 200) clocks.delete(clocks.keys().next().value!);
+  }
+  return c;
+}
 const NO_CREW: CrewMember[] = [];
 
 function CalmStrip() {
@@ -154,7 +171,18 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
     return stale ? guessRun(served, now - servedSeen.current.at, now) : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stale]);
-  const own: Mood = guess ?? served;
+  const guessed: Mood = guess ?? served;
+  // The safety net for a missed "run ended" event: a strip still saying
+  // "working" while the composer has said nothing runs for MISSED_END_MS
+  // closes on its own. A new mood from the server opens it again.
+  const [endedKey, setEndedKey] = useState<string | null>(null);
+  const quiet = guessed.kind === "working" && !isRunning;
+  useEffect(() => {
+    if (!quiet) return;
+    const t = setTimeout(() => setEndedKey(servedKey), MISSED_END_MS);
+    return () => clearTimeout(t);
+  }, [quiet, servedKey]);
+  const own: Mood = quiet && endedKey === servedKey ? { ...guessed, kind: "idle", turnStartedAt: null } : guessed;
   const { prefs } = usePrefs();
   // This thread's own choice from its header: Calm off here, or a pinned scene.
   const { threadPrefs } = useThreadPrefs(threadId);
@@ -165,18 +193,21 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
   const [, setSeen] = useState(0);
   const alert = own.kind === "idle" && features.alert ? helperAlert(state.crew, seenFailures) : null;
   const crewOnly = alert !== null;
+  const rpc = useRpc<typeof rpcContract>();
   const openHelper = (m: CrewMember) => {
     if (m.kind === "error") {
       seenFailures.add(failureKey(m));
       while (seenFailures.size > 200) seenFailures.delete(seenFailures.values().next().value!);
       setSeen((n) => n + 1);
+      // Kept on the server, so it stays gone after a reload or a bb restart.
+      rpc.call("failure_dismiss", { threadId: m.id }).catch(() => {});
     }
   };
   const mood: Mood = crewOnly ? { kind: "working", turnStartedAt: null, resetsAt: null, since: 0 } : own;
   const view = { ...state, crew, mood: own };
 
-  const theme: ThemeMode = experimental_useCodeTheme().mode;
-  const reduced = useReducedMotion();
+  const theme: ThemeMode = useThemeMode();
+  const reduced = useReducedMotion(features.still);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const visible = mood.kind !== "idle" && !threadPrefs.off;
@@ -186,10 +217,13 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
   // keeps the scene it opened with until it has fully closed.
   const lock = useRef<SceneLock | null>(null);
   const choice = threadPrefs.scene ?? prefs.scene;
-  lock.current = lockScene(lock.current, sceneFor(threadId, choice, own.run ?? 0), choice, mounted, own);
+  lock.current = lockScene(lock.current, sceneFor(threadId, choice, own.run ?? 0, prefs.excluded), choice, mounted, own);
   const kind = lock.current.scene;
   const dusk = prefs.evening;
-  const scene = useMemo(() => kind.create(), [kind]);
+  const scene = useMemo(() => kind.create({
+    surprises: clockFor(surpriseClocks, threadId, () => new SurpriseClock()),
+    gags: clockFor(gagClocks, threadId, () => new GagClock()),
+  }), [kind, threadId]);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (visible) {
@@ -265,6 +299,10 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
     else if (tip && !tip.pinned) setTip(null);
   };
   const onPointerLeave = () => { setPointer(false); if (tip && !tip.pinned) setTip(null); };
+  // Keyboard: focusing the strip shows the main character's details; Escape or leaving hides them.
+  const onFocus = () => setTip({ hit: { target: "lead", x: scene.focusX(), y: 12 }, pinned: false });
+  const onBlur = () => setTip(null);
+  const onKeyDown = (e: { key: string }) => { if (e.key === "Escape") setTip(null); };
 
   // Frames come from the shared clock. The canvas is drawn at one canvas pixel
   // per CSS pixel and scaled up crisply by the browser; text and the sky are
@@ -310,11 +348,16 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
   return (
     <div
       ref={wrapRef}
-      className="text-muted-foreground"
+      className="text-muted-foreground calm-strip"
       data-scene={kind.id}
       onPointerDown={crewOnly ? undefined : onPointerDown}
       onPointerMove={crewOnly ? undefined : onPointerMove}
       onPointerLeave={crewOnly ? undefined : onPointerLeave}
+      tabIndex={crewOnly ? undefined : 0}
+      aria-label={crewOnly ? undefined : `Calm: ${spoken}. Details`}
+      onFocus={crewOnly ? undefined : onFocus}
+      onBlur={crewOnly ? undefined : onBlur}
+      onKeyDown={crewOnly ? undefined : onKeyDown}
       style={{
         height: open ? (alert ? ALERT_HEIGHT : kind.height) : 0,
         marginBottom: open ? 0 : -gap,
@@ -354,7 +397,7 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
         )}
         {/* The state in words, for screen readers and for tools that summarize
             the cards above the prompt box (they skip a card with no text). */}
-        <span className="calm-sr-only">{`Calm: ${spoken}`}</span>
+        <span className="calm-sr-only" aria-live="polite">{`Calm: ${spoken}`}</span>
         </>
       )}
     </div>
@@ -367,8 +410,8 @@ export default definePluginApp((app) => {
     scopes: ["thread"],
     banners: [{ id: "scene", chrome: "bare", component: CalmStrip }],
   });
-  app.slots.homepageSection({ id: "calm-home", title: "Calm", component: CalmHome });
-  app.slots.experimental_threadHeaderAction({ id: "calm-thread", title: "Calm", component: CalmHeaderControl });
+  // An experimental bb slot: if a future bb renames it, Calm loads without the header button.
+  optionalSlot(app.slots.experimental_threadHeaderAction && (() => app.slots.experimental_threadHeaderAction({ id: "calm-thread", title: "Calm", component: CalmHeaderControl })), "thread header button");
   app.slots.settingsSection({
     id: "calm",
     title: "Scene",

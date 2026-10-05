@@ -1,7 +1,8 @@
 // Regressions found in the outside review.
+import { make, type Probe } from "./probe";
 import { describe, expect, it } from "vitest";
-import { Pasture } from "../src/scenes/pasture";
-import { Night } from "../src/scenes/night";
+import { pasture } from "../src/scenes/pasture";
+import { night } from "../src/scenes/night";
 import { sceneFor } from "../src/scenes";
 import { lockScene } from "../src/scene-lock";
 import type { CrewMember } from "../src/crew";
@@ -13,7 +14,7 @@ const advance = (s: { update(dt: number): void }, seconds: number) => { for (let
 
 describe("review fixes", () => {
   it("Night sky reseats crew stars when the strip narrows instead of crashing", () => {
-    const n = new Night();
+    const n = make(night);
     n.layout(900);
     n.setMood(mood("working"));
     n.setCrew(["a", "b", "c", "d", "e"].map((id) => kid(id, "working")));
@@ -24,7 +25,7 @@ describe("review fixes", () => {
   });
 
   it("a helper that already needs you still walks into the meadow", () => {
-    const p = new Pasture();
+    const p = make(pasture);
     p.layout(900);
     p.setMood(mood("working"));
     p.setCrew([kid("w", "waiting")]);
@@ -37,15 +38,15 @@ describe("review fixes", () => {
     const pick = (run: number) => sceneFor("t", "each-run", run);
     let lock = lockScene(null, pick(1), "each-run", true, mood("working", 1));
     lock = lockScene(lock, pick(1), "each-run", true, mood("error", 1));
-    expect(lock.scene.id).toBe("pasture");
+    expect(lock.scene.id).toBe(pick(1).id);
     lock = lockScene(lock, pick(2), "each-run", true, mood("working", 2));   // strip never closed
-    expect(lock.scene.id).toBe("sea");
+    expect(lock.scene.id).toBe(pick(2).id);
   });
 });
 
 describe("second review fixes", () => {
   it("Night sky seats more crew stars again when the strip widens", () => {
-    const n = new Night();
+    const n = make(night);
     n.layout(900);
     n.setMood(mood("working"));
     n.setCrew(["a", "b", "c", "d", "e"].map((id) => kid(id, "working")));
@@ -59,9 +60,9 @@ describe("second review fixes", () => {
     const pick = (run: number) => sceneFor("t", "each-run", run);
     let lock = lockScene(null, pick(1), "each-run", true, mood("working", 1));
     lock = lockScene(lock, pick(1), "each-run", true, mood("idle", 1));    // run over, alert keeps the strip up
-    expect(lock.scene.id).toBe("pasture");
+    expect(lock.scene.id).toBe(pick(1).id);
     lock = lockScene(lock, pick(2), "each-run", true, mood("working", 2));
-    expect(lock.scene.id).toBe("sea");
+    expect(lock.scene.id).toBe(pick(2).id);
   });
 
   it("the closing strip keeps its scene when nothing new started", () => {
@@ -69,6 +70,6 @@ describe("second review fixes", () => {
     let lock = lockScene(null, pick(1), "each-run", true, mood("working", 1));
     lock = lockScene(lock, pick(1), "each-run", true, mood("idle", 1));
     lock = lockScene(lock, pick(1), "each-run", true, mood("working", 1));   // resumed after a short pause
-    expect(lock.scene.id).toBe("pasture");
+    expect(lock.scene.id).toBe(pick(1).id);
   });
 });

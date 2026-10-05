@@ -14,8 +14,7 @@ import {
   type MoodKind,
 } from "./src/mood";
 import {
-  EVENING_CHOICES, FEATURES, SCENE_CHOICES, SCENE_IDS, cleanPrefs, cleanThreadPrefs, emptyDay, tally,
-  type DayStats, type ThreadPrefs,
+  EVENING_CHOICES, FEATURES, SCENE_CHOICES, SCENE_IDS, cleanPrefs, cleanThreadPrefs, type ThreadPrefs,
 } from "./src/settings";
 
 const kindSchema = z.enum(["idle", "working", "waiting", "rate", "error"]);
@@ -27,24 +26,22 @@ const moodSchema = z.object({
   run: z.number().optional(),
   lastStart: z.number().nullable().optional(),
 });
-const crewSchema = z.array(z.object({ id: z.string(), kind: kindSchema, title: z.string(), since: z.number().nullable().optional() }));
+const crewSchema = z.array(z.object({ id: z.string(), kind: kindSchema, title: z.string(), since: z.number().nullable().optional(), dismissed: z.boolean().optional() }));
 
 const featuresSchema = z.object(Object.fromEntries(FEATURES.map((f) => [f, z.boolean()])) as Record<(typeof FEATURES)[number], z.ZodBoolean>);
 const prefsSchema = z.object({
   scene: z.enum(SCENE_CHOICES),
   evening: z.union([z.literal(EVENING_CHOICES[0]), z.literal(EVENING_CHOICES[1]), z.literal(EVENING_CHOICES[2])]),
   features: featuresSchema,
+  excluded: z.array(z.enum(SCENE_IDS)),
 });
 const prefsChangeSchema = z.object({
   scene: z.enum(SCENE_CHOICES).optional(),
   evening: prefsSchema.shape.evening.optional(),
   features: featuresSchema.partial().optional(),
+  excluded: z.array(z.enum(SCENE_IDS)).max(SCENE_IDS.length).optional(),
 });
 const threadPrefsSchema = z.object({ off: z.boolean(), scene: z.enum(SCENE_IDS).nullable() });
-const statsSchema = z.object({
-  day: z.string(), runs: z.number(), hops: z.number(), longest: z.number(),
-  lastThreadId: z.string().nullable(), lastRun: z.number(), nextDayAt: z.number().optional(),
-});
 const threadIdSchema = z.string().min(1).max(200);
 
 export const rpcContract = defineRpcContract({
@@ -59,8 +56,8 @@ export const rpcContract = defineRpcContract({
   /** One thread's own choice, from its header control. */
   thread_prefs_get: { input: z.object({ threadId: threadIdSchema }), output: threadPrefsSchema },
   thread_prefs_set: { input: z.object({ threadId: threadIdSchema, off: z.boolean().optional(), scene: z.enum(SCENE_IDS).nullable().optional() }), output: threadPrefsSchema },
-  /** Today's runs, hops, and longest run, for the home section. */
-  stats_get: { input: z.null(), output: statsSchema },
+  /** A failed helper was opened from its alert: stop alerting about that failure. */
+  failure_dismiss: { input: z.object({ threadId: threadIdSchema }), output: z.object({ ok: z.boolean() }) },
 });
 
 /** Realtime channels. Payloads carry the thread id; clients filter. */
@@ -69,13 +66,12 @@ export const STEP_CHANNEL = "step";
 export const CREW_CHANNEL = "crew";
 export const PREFS_CHANNEL = "prefs";
 export const THREAD_PREFS_CHANNEL = "thread-prefs";
-export const STATS_CHANNEL = "stats";
 export type ThreadPrefsSignal = { threadId: string; prefs: ThreadPrefs };
 export type MoodSignal = { threadId: string; mood: Mood };
 export type StepSignal = { threadId: string; steps: number };
 export type CrewSignal = { threadId: string; crew: CrewMember[] };
 
-interface ThreadFacts { id: string; status: string; parentThreadId: string | null; title: string | null; titleFallback: string | null; archivedAt?: number | null }
+interface ThreadFacts { id: string; status: string; parentThreadId: string | null; title: string | null; titleFallback: string | null; archivedAt?: number | null; updatedAt?: number }
 
 export default async function plugin(bb: BbPluginApi) {
   // The scene and evening choices, set from Calm's settings section.
@@ -88,21 +84,6 @@ export default async function plugin(bb: BbPluginApi) {
     Object.entries((await bb.storage.kv.get<Record<string, unknown>>(THREADS_KEY)) ?? {}).map(([id, p]) => [id, cleanThreadPrefs(p)]),
   );
   const saveThreadPrefs = () => bb.storage.kv.set(THREADS_KEY, Object.fromEntries(threadPrefs));
-
-  // Today's numbers for the home section: kept in memory, saved a few seconds after a change.
-  const STATS_KEY = "today";
-  let today: DayStats = { ...emptyDay(Date.now()), ...((await bb.storage.kv.get<DayStats>(STATS_KEY)) ?? {}) };
-  let statsSave: ReturnType<typeof setTimeout> | null = null;
-  /** Today's numbers plus when this computer's day ends, so an open home screen can refresh then. */
-  const withNextDay = (s: DayStats) => {
-    const d = new Date(); d.setHours(24, 0, 0, 0);
-    return { ...s, nextDayAt: d.getTime() };
-  };
-  function count(change: Parameters<typeof tally>[2]) {
-    today = tally(today, Date.now(), change);
-    bb.realtime.publish(STATS_CHANNEL, withNextDay(today));
-    statsSave ??= setTimeout(() => { statsSave = null; void bb.storage.kv.set(STATS_KEY, today); }, 3000);
-  }
 
   const moods = new Map<string, Mood>();
   // Each thread's run count, kept across restarts so "a new one each time"
@@ -120,6 +101,31 @@ export default async function plugin(bb: BbPluginApi) {
     runsSave ??= setTimeout(() => { runsSave = null; void bb.storage.kv.set(RUNS_KEY, Object.fromEntries(runs)); }, 3000);
   }
   const baseMood = (id: string): Mood => moods.get(id) ?? { ...IDLE, run: runs.get(id) ?? 0 };
+
+  // Failed helpers you have opened, kept across reloads and restarts so their
+  // alert stays gone: child id -> when it was opened. An entry lasts until
+  // Calm sees that helper running again (an event, or a rebuild that finds it
+  // active), so its next failure alerts afresh. bb's record has no stable id
+  // for one failure, and its update time moves with any edit, so it can't
+  // tell an old failure from a new one.
+  const DISMISSED_KEY = "dismissed", MAX_DISMISSED = 500;
+  const dismissed = new Map<string, number>(Object.entries((await bb.storage.kv.get<Record<string, number>>(DISMISSED_KEY)) ?? {}));
+  const saveDismissed = () => bb.storage.kv.set(DISMISSED_KEY, Object.fromEntries(dismissed)).catch((e) => {
+    bb.log.warn(`couldn't save dismissed alerts: ${e instanceof Error ? e.message : String(e)}`);
+  });
+  const isDismissed = (id: string) => dismissed.has(id);
+  /** The helper is running again: forget its dismissal. */
+  const undismiss = (id: string) => { if (dismissed.delete(id)) void saveDismissed(); };
+  /** Opening a failed helper, from the alert or from anywhere in bb, ends its alert. */
+  function dismissFailure(id: string) {
+    const m = moods.get(id);
+    if (m?.kind !== "error" || isDismissed(id)) return;
+    dismissed.delete(id); dismissed.set(id, Date.now());
+    while (dismissed.size > MAX_DISMISSED) dismissed.delete(dismissed.keys().next().value!);
+    void saveDismissed();
+    const parent = parentOf.get(id);
+    if (parent) publishCrew(parent);
+  }
   const steps = new Map<string, number>();     // agent steps in the current turn
   const lastSeq = new Map<string, number>();   // last thread event already counted
   const parentOf = new Map<string, string>();
@@ -146,6 +152,9 @@ export default async function plugin(bb: BbPluginApi) {
     stats.calls = 0; stats.ms = 0; stats.byKind = {};
   });
 
+  /** When a failed thread failed, as bb records it, so a rebuilt failure keeps its time. */
+  const failedAt = (t: ThreadFacts) => (typeof t.updatedAt === "number" && t.updatedAt > 0 ? Math.min(t.updatedAt, Date.now()) : Date.now());
+
   /** Remember a thread's parent and title from any thread record bb hands us. */
   function note(t: ThreadFacts) {
     titles.set(t.id, (t.title ?? t.titleFallback ?? "Child thread").slice(0, 80));
@@ -161,12 +170,12 @@ export default async function plugin(bb: BbPluginApi) {
     const parent = parentOf.get(id);
     gens.delete(id); gens.set(id, ++forgetTick);
     while (gens.size > 5000) gens.delete(gens.keys().next().value!);
-    if (today.lastThreadId === id) { today = { ...today, lastThreadId: null }; void bb.storage.kv.set(STATS_KEY, today); }
     moods.delete(id); steps.delete(id); lastSeq.delete(id); parentOf.delete(id); titles.delete(id);
     watched.delete(id); latestSeq.delete(id); lastCount.delete(id); revs.delete(id);
     childrenOf.delete(id); seededCrew.delete(id);
     if (threadPrefs.delete(id)) void saveThreadPrefs();
     if (runs.delete(id)) rememberRunsChanged();
+    if (dismissed.delete(id)) void saveDismissed();
     const t = pendingCount.get(id); if (t) { clearTimeout(t); pendingCount.delete(id); }
     if (parent) { childrenOf.get(parent)?.delete(id); publishCrew(parent); }
   }
@@ -178,7 +187,10 @@ export default async function plugin(bb: BbPluginApi) {
       // A run's start for a busy helper; for a failed or paused one, when that
       // happened, so each failure is its own event (and its own alert).
       const since = kind === "error" || kind === "rate" ? m?.since ?? null : m?.turnStartedAt ?? null;
-      if (ON_STRIP.has(kind)) crew.push({ id, kind, title: titles.get(id) ?? "Child thread", since });
+      if (!ON_STRIP.has(kind)) continue;
+      const member: CrewMember = { id, kind, title: titles.get(id) ?? "Child thread", since };
+      if (kind === "error" && isDismissed(id)) member.dismissed = true;
+      crew.push(member);
     }
     return crew.sort((a, b) => a.id.localeCompare(b.id));
   }
@@ -196,18 +208,16 @@ export default async function plugin(bb: BbPluginApi) {
   const gen = (id: string) => gens.get(id) ?? 0;
   let forgetTick = 0;
 
-  function apply(threadId: string, event: MoodEvent) {
+  function apply(threadId: string, event: MoodEvent, at = Date.now()) {
     const before = baseMood(threadId);
-    const after = nextMood(before, event, Date.now());
+    const after = nextMood(before, event, at);
     if (after.run) rememberRun(threadId, after.run);
     if (after === before) return;
     bb.log.debug(`${threadId}: ${event.type} -> ${after.kind}, run ${after.run ?? 0}`);
     if (after.turnStartedAt !== before.turnStartedAt && after.kind === "working") steps.set(threadId, 0);
-    if ((after.run ?? 0) > (before.run ?? 0)) count({ started: { threadId, run: after.run ?? 0 } });
-    const running = (k: string) => k === "working" || k === "waiting";
-    if (running(before.kind) && !running(after.kind) && before.turnStartedAt) count({ ended: Date.now() - before.turnStartedAt });
     moods.set(threadId, after);
     revs.set(threadId, rev(threadId) + 1);
+    if (after.kind === "working") undismiss(threadId);   // running again: its next failure alerts
     bb.realtime.publish(MOOD_CHANNEL, { threadId, mood: after } satisfies MoodSignal);
     const parent = parentOf.get(threadId);
     if (parent) publishCrew(parent);
@@ -224,7 +234,7 @@ export default async function plugin(bb: BbPluginApi) {
   });
   bb.events.on("thread.active", ({ thread }) => { note(thread); apply(thread.id, { type: "active" }); });
   bb.events.on("thread.idle", ({ thread }) => { note(thread); apply(thread.id, { type: "idle" }); });
-  bb.events.on("thread.failed", ({ thread }) => { note(thread); apply(thread.id, { type: "failed" }); });
+  bb.events.on("thread.failed", ({ thread }) => { note(thread); apply(thread.id, { type: "failed" }, failedAt(thread)); });
   bb.events.on("interaction.pending", ({ thread }) => {
     note(thread);
     revs.set(thread.id, rev(thread.id) + 1);   // any read of open questions started before this is out of date
@@ -241,34 +251,53 @@ export default async function plugin(bb: BbPluginApi) {
     bb.events.on(gone, ({ thread }) => forget(thread.id));
   }
 
-  // bb coalesces new thread events to at most one notification per second.
-  // Each is the moment to count new agent steps (completed tool calls) and to
-  // re-read whether a question or approval is open, so the mood never depends
-  // on which of two near-simultaneous events lands first.
-  // bb coalesces new thread events to at most one notification per second.
-  // Each one marks the thread active. Only a thread already waiting on you
-  // re-reads its open interactions, to notice the answer; a new question
-  // arrives as interaction.pending. Steps are counted from the last seen
-  // event, and only for threads someone is watching.
-  bb.events.on("experimental_thread.events", async ({ thread, sequence }) => {
+  // bb coalesces new thread events to at most one notification per second
+  // (an experimental bb event). Each one marks the thread active. Only a
+  // thread already waiting on you re-reads its open interactions, to notice
+  // the answer; a new question arrives as interaction.pending. Steps are
+  // counted from the last seen event, and only for threads someone watches.
+  // The event is registered defensively: if a future bb renames it, Calm
+  // still loads, the waiting check below still clears answered questions,
+  // and steps simply stop counting.
+  const onThreadEvents = async ({ thread, sequence }: { thread: ThreadFacts; sequence: number }) => {
     note(thread);
     if (thread.status !== "active") {
       // The run is over: count its last steps, if a strip is watching.
       if (isWatched(thread.id)) { latestSeq.set(thread.id, sequence); scheduleCount(thread.id); } else lastSeq.delete(thread.id);
       return;
     }
-    if (moods.get(thread.id)?.kind === "waiting") {
-      const seen = rev(thread.id);
-      const open = await hasPendingInteraction(thread.id);
-      // A new question may have landed while we read; that answer wins.
-      if (!open && rev(thread.id) === seen) apply(thread.id, { type: "resolved" });
-    } else {
-      apply(thread.id, { type: "active" });
-    }
+    if (moods.get(thread.id)?.kind === "waiting") await recheckWaiting(thread.id);
+    else apply(thread.id, { type: "active" });
     if (!isWatched(thread.id)) { lastSeq.delete(thread.id); return; }
     latestSeq.set(thread.id, sequence);
     scheduleCount(thread.id);
-  });
+  };
+  try {
+    bb.events.on("experimental_thread.events", onThreadEvents);
+  } catch (e) {
+    bb.log.warn(`thread events unavailable; steps won't be counted: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  /** A thread waiting on you: has the question been answered? A new question that lands meanwhile wins. */
+  async function recheckWaiting(threadId: string) {
+    const seen = rev(threadId);
+    const open = await hasPendingInteraction(threadId);
+    if (!open && rev(threadId) === seen && moods.get(threadId)?.kind === "waiting") apply(threadId, { type: "resolved" });
+  }
+  // The safety net for "waiting on you": every WAIT_CHECK_MS, each watched
+  // thread, or helper of a watched thread, still waiting re-reads its open
+  // questions, so an answer always clears the amber light even without the
+  // thread events above.
+  const WAIT_CHECK_MS = 15_000;
+  let waitCheck: ReturnType<typeof setInterval> | null = null;
+  async function checkWaiting() {
+    for (const [id, m] of moods) {
+      // A watched thread, or a helper on a watched parent's strip or alert.
+      const parent = parentOf.get(id);
+      if (m.kind !== "waiting" || !(isWatched(id) || (parent !== undefined && isWatched(parent)))) continue;
+      await recheckWaiting(id).catch((e) => bb.log.warn(`waiting check failed: ${e instanceof Error ? e.message : String(e)}`));
+    }
+  }
 
   // Steps are completed agent actions, counted only for threads with a strip
   // open, at most one history read per thread every COUNT_MS. Each thread's
@@ -300,9 +329,10 @@ export default async function plugin(bb: BbPluginApi) {
   // bb stops this service when the plugin unloads; clear any batched reads then.
   bb.background.service("step-counter", {
     start: (signal) => new Promise<void>((resolve) => {
+      waitCheck = setInterval(() => void checkWaiting(), WAIT_CHECK_MS);
       signal.addEventListener("abort", () => {
+        if (waitCheck) { clearInterval(waitCheck); waitCheck = null; }
         if (runsSave) { clearTimeout(runsSave); runsSave = null; void bb.storage.kv.set(RUNS_KEY, Object.fromEntries(runs)); }
-        if (statsSave) { clearTimeout(statsSave); statsSave = null; void bb.storage.kv.set(STATS_KEY, today); }
         for (const t of pendingCount.values()) clearTimeout(t);
         pendingCount.clear();
         resolve();
@@ -315,17 +345,21 @@ export default async function plugin(bb: BbPluginApi) {
     const before = steps.get(threadId) ?? 0;
     const total = replace ? n : before + n;
     steps.set(threadId, total);
-    if (total > before) count({ hops: total - before });
     bb.realtime.publish(STEP_CHANNEL, { threadId, steps: total } satisfies StepSignal);
   }
 
+  /** Which run a mood belongs to: the current run, or the one that just ended (an idle mood remembers its start). */
+  const runOf = (m: Mood | undefined) => (m?.kind === "working" || m?.kind === "waiting" ? m.turnStartedAt : m?.kind === "idle" ? m.lastStart ?? null : null);
+  const muted = (id: string) => threadPrefs.get(id)?.off === true;
+
   async function countSteps(threadId: string) {
+    if (muted(threadId)) return;
     lastCount.set(threadId, Date.now());
     const after = lastSeq.get(threadId);
     if (after === undefined) return backfillSteps(threadId);   // no mark yet: count this run from its start
     const target = latestSeq.get(threadId);
     if (target === undefined || target <= after) return;
-    const g = gen(threadId), run = moods.get(threadId)?.turnStartedAt ?? null;
+    const g = gen(threadId), run = runOf(moods.get(threadId));
     let n = 0, from = after;
     try {
       // bb returns at most 100 events per call; page through the rest.
@@ -345,12 +379,16 @@ export default async function plugin(bb: BbPluginApi) {
       if (isWatched(threadId)) scheduleCount(threadId, RETRY_MS);
       return;
     }
-    if (gen(threadId) !== g) return;   // archived or deleted meanwhile
+    if (gen(threadId) !== g || muted(threadId)) return;   // archived, deleted, or muted meanwhile
+    const now = runOf(moods.get(threadId));
+    if (now !== run && now !== null) {
+      // A new run began during the read, so these events mix two runs.
+      // Commit nothing from them: count the new run afresh from its start.
+      lastSeq.delete(threadId);
+      return backfillSteps(threadId);
+    }
+    // The same run, whether still going or just ended: it keeps its steps.
     lastSeq.set(threadId, from);
-    const now = moods.get(threadId)?.turnStartedAt ?? null;
-    // A run that ended meanwhile still gets its steps. If a new run already
-    // began, they count toward today's hops but not toward the new run.
-    if (now !== run && now !== null) { if (n > 0) count({ hops: n }); return; }
     addSteps(threadId, n);
   }
 
@@ -360,9 +398,9 @@ export default async function plugin(bb: BbPluginApi) {
    * first and sets the mark at the newest event.
    */
   async function backfillSteps(threadId: string) {
+    if (muted(threadId)) return;
     const mood = moods.get(threadId);
     // The current run, or the one that just ended (an idle mood remembers its start).
-    const runOf = (m: Mood | undefined) => (m?.kind === "working" || m?.kind === "waiting" ? m.turnStartedAt : m?.kind === "idle" ? m.lastStart ?? null : null);
     const run = runOf(mood);
     if (!run) return;
     const g = gen(threadId);
@@ -388,7 +426,7 @@ export default async function plugin(bb: BbPluginApi) {
       if (isWatched(threadId)) scheduleCount(threadId, RETRY_MS);   // with no mark yet, the retry backfills
       return;
     }
-    if (gen(threadId) !== g || runOf(moods.get(threadId)) !== run) return;
+    if (gen(threadId) !== g || muted(threadId) || runOf(moods.get(threadId)) !== run) return;
     if (top !== undefined) lastSeq.set(threadId, top);
     addSteps(threadId, n, true);
   }
@@ -403,21 +441,21 @@ export default async function plugin(bb: BbPluginApi) {
 
   // Moods are in memory, so after a reload rebuild a thread's mood from its
   // current status the first time a strip asks.
-  function moodFromStatus(id: string, status: string, now: number): Mood {
+  function moodFromStatus(id: string, status: string, now: number, failedSince = now): Mood {
     // A run already under way when we rebuild keeps the scene it started with.
     const base = { ...IDLE, run: Math.max(0, (runs.get(id) ?? 1) - 1) };
     if (status === "active" || status === "starting") return nextMood(base, { type: "active" }, now);
-    if (status === "error") return nextMood(base, { type: "failed" }, now);
+    if (status === "error") return nextMood(base, { type: "failed" }, failedSince);
     return { ...IDLE, run: runs.get(id) ?? 0 };
   }
   async function reconcile(threadId: string): Promise<Mood> {
     const g = gen(threadId);
     const thread = await sdk("threads.get", () => bb.sdk.threads.get({ threadId }));
     note(thread);
-    let mood = moodFromStatus(threadId, thread.status, Date.now());
+    let mood = moodFromStatus(threadId, thread.status, Date.now(), failedAt(thread));
     if (mood.kind === "working" && (await hasPendingInteraction(threadId))) mood = nextMood(mood, { type: "pending" }, Date.now());
     // An event that arrived while we read is newer than this rebuild.
-    if (!moods.has(threadId) && gen(threadId) === g) moods.set(threadId, mood);
+    if (!moods.has(threadId) && gen(threadId) === g) { moods.set(threadId, mood); if (mood.kind === "working" || mood.kind === "waiting") undismiss(threadId); }
     return moods.get(threadId) ?? mood;
   }
 
@@ -444,10 +482,10 @@ export default async function plugin(bb: BbPluginApi) {
         if (gone(kid.id)) continue;
         note(kid);
         if (!moods.has(kid.id)) {
-          let mood = moodFromStatus(kid.id, kid.status, now);
+          let mood = moodFromStatus(kid.id, kid.status, now, failedAt(kid));
           if (mood.kind === "working" && (await hasPendingInteraction(kid.id))) mood = nextMood(mood, { type: "pending" }, now);
           if (gone(kid.id) || gen(parentId) !== g) { forget(kid.id); continue; }
-          if (!moods.has(kid.id)) moods.set(kid.id, mood);
+          if (!moods.has(kid.id)) { moods.set(kid.id, mood); if (mood.kind === "working" || mood.kind === "waiting") undismiss(kid.id); }
         }
       }
       if (kids.length < 100) break;
@@ -459,17 +497,19 @@ export default async function plugin(bb: BbPluginApi) {
   bb.rpc.register(rpcContract, {
     state_get: async ({ threadId }) => {
       if (!moods.has(threadId)) await reconcile(threadId);
+      dismissFailure(threadId);   // you opened this thread: if it is a failed helper, its alert is done
       await seedCrew(threadId).catch((e) => bb.log.warn(`crew lookup failed: ${e instanceof Error ? e.message : String(e)}`));
-      await watch(threadId);
+      if (!threadPrefs.get(threadId)?.off) await watch(threadId);   // Calm off here: no step counting
       // Read everything now, after the awaits, so nothing older than an event that arrived meanwhile goes out.
       return { mood: moods.get(threadId) ?? baseMood(threadId), steps: steps.get(threadId) ?? 0, crew: crewOf(threadId) };
     },
     watch: async ({ threadId }) => {
       await seedCrew(threadId).catch(() => {});   // retries a crew lookup that failed when the strip opened
-      await watch(threadId);
+      if (!threadPrefs.get(threadId)?.off) await watch(threadId);
       return { steps: steps.get(threadId) ?? 0 };
     },
     prefs_get: () => readPrefs(),
+    failure_dismiss: ({ threadId }) => { dismissFailure(threadId); return { ok: true }; },
     thread_prefs_get: ({ threadId }) => threadPrefs.get(threadId) ?? { off: false, scene: null },
     thread_prefs_set: ({ threadId, ...change }) => {
       // One save at a time; memory changes only after storage accepted it.
@@ -481,15 +521,16 @@ export default async function plugin(bb: BbPluginApi) {
         while (all.size > MAX_THREAD_PREFS) all.delete(all.keys().next().value!);
         await bb.storage.kv.set(THREADS_KEY, Object.fromEntries(all));
         threadPrefs = all;
+        if (next.off) {   // muted: stop counting its steps, including a count already queued
+          watched.delete(threadId); lastSeq.delete(threadId);
+          const t = pendingCount.get(threadId); if (t) { clearTimeout(t); pendingCount.delete(threadId); }
+        }
+        else if (change.off === false) void watch(threadId).catch(() => {});   // back on: count from this run's start
         bb.realtime.publish(THREAD_PREFS_CHANNEL, { threadId, prefs: next } satisfies ThreadPrefsSignal);
         return next;
       });
       threadQueue = save.catch(() => undefined);
       return save;
-    },
-    stats_get: () => {
-      today = tally(today, Date.now(), {});   // a new day starts at zero
-      return withNextDay(today);
     },
     prefs_set: (change) => {
       // One save at a time, so two quick changes both land.

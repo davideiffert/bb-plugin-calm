@@ -1,12 +1,55 @@
+import { make, type Probe } from "./probe";
 import { describe, expect, it } from "vitest";
-import { sceneFor, SCENES } from "../src/scenes";
-import { Sea } from "../src/scenes/sea";
-import { Night } from "../src/scenes/night";
-import { DEFAULT_FEATURES, cleanPrefs, cleanThreadPrefs, emptyDay, tally } from "../src/settings";
+import { bagIndex, sceneFor, SCENES } from "../src/scenes";
+import { sea } from "../src/scenes/sea";
+import { night } from "../src/scenes/night";
+import { DEFAULT_FEATURES, SCENE_IDS, cleanPrefs, cleanThreadPrefs } from "../src/settings";
 import type { Mood, MoodKind } from "../src/mood";
 
 const mood = (kind: MoodKind): Mood => ({ kind, turnStartedAt: 0, resetsAt: null, since: 0 });
 const advance = (p: { update(dt: number): void }, seconds: number) => { for (let t = 0; t < seconds; t += 1 / 30) p.update(1 / 30); };
+
+describe("a new one each time (shuffled bag)", () => {
+  it("shows every scene once per bag, never the same twice in a row, the same in every window", () => {
+    for (const n of [3, 5, 16]) for (const thread of ["thr_a", "thr_b", "thr_long_thread_id_123"]) {
+      const runs = Array.from({ length: n * 6 }, (_, i) => bagIndex(thread, i + 1, n));
+      for (let b = 0; b < 6; b++) expect(new Set(runs.slice(b * n, b * n + n)).size).toBe(n);
+      for (let i = 1; i < runs.length; i++) expect(runs[i]).not.toBe(runs[i - 1]);
+      expect(Array.from({ length: n * 6 }, (_, i) => bagIndex(thread, i + 1, n))).toEqual(runs);
+    }
+  });
+
+  it("differs between threads, so it feels random", () => {
+    const first = (id: string) => Array.from({ length: 16 }, (_, i) => bagIndex(id, i + 1, 16)).join(",");
+    expect(first("thr_a")).not.toBe(first("thr_b"));
+  });
+
+  it("alternates when there are only two scenes", () => {
+    const runs = [1, 2, 3, 4].map((r) => bagIndex("t", r, 2));
+    expect(runs[0]).not.toBe(runs[1]);
+    expect(runs[2]).toBe(runs[0]);
+  });
+});
+
+describe("the random mix", () => {
+  it("lists every scene id, in picker order", () => {
+    expect([...SCENE_IDS]).toEqual(SCENES.map((s) => s.id));
+  });
+
+  it("draws only from scenes still in the mix", () => {
+    const out = ["pasture", "sea", "night", "balloons"];
+    const picks = new Set(Array.from({ length: 40 }, (_, i) => sceneFor("thr_m", "each-run", i + 1, out).id));
+    for (const id of out) expect(picks.has(id)).toBe(false);
+    expect(picks.size).toBe(SCENES.length - out.length);
+    expect(out).not.toContain(sceneFor("thr_m", "each-thread", 0, out).id);
+    expect(sceneFor("thr_m", "sea", 0, out).id).toBe("sea");   // a chosen scene always shows
+  });
+
+  it("keeps only known ids, and leaving every scene out leaves none out", () => {
+    expect(cleanPrefs({ excluded: ["sea", "volcano", "sea"] }).excluded).toEqual(["sea"]);
+    expect(cleanPrefs({ excluded: [...SCENE_IDS] }).excluded).toEqual([]);
+  });
+});
 
 describe("sceneFor", () => {
   it("uses the named scene", () => {
@@ -20,21 +63,23 @@ describe("sceneFor", () => {
   it("keeps one scene per thread, and spreads threads across scenes", () => {
     const pick = (id: string) => sceneFor(id, "each-thread").id;
     expect(pick("thr_abc123")).toBe(pick("thr_abc123"));
-    const seen = new Set(Array.from({ length: 30 }, (_, i) => pick(`thr_${i}x`)));
+    const seen = new Set(Array.from({ length: 400 }, (_, i) => pick(`thr_${i}x`)));
     expect(seen.size).toBe(SCENES.length);
   });
 });
 
 describe("cleanPrefs", () => {
   it("keeps known values and defaults the rest", () => {
-    expect(cleanPrefs({ scene: "sea", evening: 20 })).toEqual({ scene: "sea", evening: 20, features: DEFAULT_FEATURES });
-    expect(cleanPrefs({ scene: "volcano", evening: 90 })).toEqual({ scene: "each-run", evening: 40, features: DEFAULT_FEATURES });
-    expect(cleanPrefs(undefined)).toEqual({ scene: "each-run", evening: 40, features: DEFAULT_FEATURES });
+    expect(cleanPrefs({ scene: "sea", evening: 20 })).toEqual({ scene: "sea", evening: 20, features: DEFAULT_FEATURES, excluded: [] });
+    expect(cleanPrefs({ scene: "volcano", evening: 90 })).toEqual({ scene: "each-run", evening: 40, features: DEFAULT_FEATURES, excluded: [] });
+    expect(cleanPrefs(undefined)).toEqual({ scene: "each-run", evening: 40, features: DEFAULT_FEATURES, excluded: [] });
   });
 
-  it("defaults to a new scene each run, with every feature on", () => {
+  it("defaults to a new scene each run, with every feature on and Still pictures off", () => {
     expect(cleanPrefs(undefined).scene).toBe("each-run");
-    expect(Object.values(DEFAULT_FEATURES).every(Boolean)).toBe(true);
+    const { still, ...rest } = DEFAULT_FEATURES;
+    expect(Object.values(rest).every(Boolean)).toBe(true);
+    expect(still).toBe(false);   // motion follows the system setting unless you choose stills
   });
 
   it("keeps a feature switched off and ignores unknown ones", () => {
@@ -45,42 +90,22 @@ describe("cleanPrefs", () => {
   });
 });
 
-describe("thread prefs and today's numbers", () => {
-  it("writes today's line in the scene's own words", async () => {
-    const { todayLine } = await import("../src/home");
-    const day = { day: "x", runs: 4, hops: 23, longest: 12 * 60000, lastThreadId: null, lastRun: 0 };
-    expect(todayLine(day, "pasture")).toBe("Today: 4 runs · 23 hops · longest run 12 min");
-    expect(todayLine({ ...day, runs: 1, hops: 1, longest: 20000 }, "sea")).toBe("Today: 1 run · 1 jump · longest run under 1 min");
-    expect(todayLine({ ...day, runs: 0, hops: 0, longest: 0 }, "night")).toBe("Today: no runs yet");
-  });
-
+describe("thread prefs", () => {
   it("keeps only a known pinned scene", () => {
     expect(cleanThreadPrefs({ off: true, scene: "volcano" })).toEqual({ off: true, scene: null });
     expect(cleanThreadPrefs({ scene: "sea" })).toEqual({ off: false, scene: "sea" });
-  });
-
-  it("counts runs, hops, and the longest run, and starts over on a new day", () => {
-    const morning = new Date(2026, 9, 4, 9, 0).getTime();
-    let s = emptyDay(morning);
-    s = tally(s, morning, { started: { threadId: "t", run: 3 } });
-    s = tally(s, morning, { hops: 5 });
-    s = tally(s, morning, { ended: 12.4 * 60000 });
-    s = tally(s, morning, { ended: 3 * 60000 });
-    expect(s).toMatchObject({ runs: 1, hops: 5, longest: 12.4 * 60000, lastThreadId: "t", lastRun: 3 });
-    const tomorrow = new Date(2026, 9, 5, 8, 0).getTime();
-    expect(tally(s, tomorrow, {})).toMatchObject({ runs: 0, hops: 0, longest: 0, lastThreadId: "t" });
   });
 });
 
 type SeaInner = { fish: unknown; anchor: number; x: number; lastFish: number };
 describe("Sea", () => {
-  const sea = () => { const s = new Sea(); s.layout(900); s.setMood(mood("working")); return s; };
+  const open = () => { const s = make(sea); s.layout(900); s.setMood(mood("working")); return s; };
 
   it("starts under way with a fish already leaping", () => {
-    expect((sea() as unknown as SeaInner).fish).not.toBeNull();
+    expect((open() as unknown as SeaInner).fish).not.toBeNull();
   });
   it("sails while working and drops anchor while waiting", () => {
-    const s = sea();
+    const s = open();
     const x0 = (s as unknown as SeaInner).x;
     advance(s, 2);
     expect((s as unknown as SeaInner).x).not.toBe(x0);
@@ -93,7 +118,7 @@ describe("Sea", () => {
     expect(inner.x).toBe(x1);
   });
   it("leaps at most once per debounce window", () => {
-    const s = sea();
+    const s = open();
     advance(s, 1.8);                     // past the opening leap's window
     s.step();
     const first = (s as unknown as SeaInner).lastFish;
@@ -105,13 +130,13 @@ describe("Sea", () => {
 
 type NightInner = { streak: unknown; drift: number };
 describe("Night", () => {
-  const night = () => { const n = new Night(); n.layout(900); n.setMood(mood("working")); return n; };
+  const openNight = () => { const n = make(night); n.layout(900); n.setMood(mood("working")); return n; };
 
   it("opens with a shooting star", () => {
-    expect((night() as unknown as NightInner).streak).not.toBeNull();
+    expect((openNight() as unknown as NightInner).streak).not.toBeNull();
   });
   it("holds the sky still while waiting", () => {
-    const n = night();
+    const n = openNight();
     advance(n, 1);
     n.setMood(mood("waiting"));
     const d = (n as unknown as NightInner).drift;
@@ -122,17 +147,16 @@ describe("Night", () => {
 
 describe("opening a thread that is not running", () => {
   it("shows no fish or shooting star", () => {
-    const s = new Sea(); s.setMood(mood("error")); s.layout(900);
+    const s = make(sea); s.setMood(mood("error")); s.layout(900);
     expect((s as unknown as SeaInner).fish).toBeNull();
-    const n = new Night(); n.setMood(mood("waiting")); n.layout(900);
+    const n = make(night); n.setMood(mood("waiting")); n.layout(900);
     expect((n as unknown as NightInner).streak).toBeNull();
   });
 });
 
 describe("a new one each time", () => {
-  it("moves to the next scene in order on every run, never repeating", () => {
-    const order = [1, 2, 3, 4, 5, 6].map((run) => sceneFor("thr_x", "each-run", run).id);
-    expect(order).toEqual(["pasture", "sea", "night", "pasture", "sea", "night"]);
+  it("moves to a different scene on every run", () => {
+    const order = Array.from({ length: 20 }, (_, i) => sceneFor("thr_x", "each-run", i + 1).id);
     for (let i = 1; i < order.length; i++) expect(order[i]).not.toBe(order[i - 1]);
   });
 });

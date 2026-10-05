@@ -2,7 +2,7 @@
 // when its colors or the strip's size change; a "follow" glow then slides
 // after the main character with a CSS transform, which the browser moves
 // without repainting anything.
-import { GLOW_SHAPE, glowBackground, type GlowShape, type Hsla } from "./scenes/common";
+import { GLOW_SHAPE, glowBackground, type GlowShape, type Hsla } from "./kit/common";
 
 const FOLLOW_RATE = 0.8;   // how quickly the glow catches up, per second (slow and calm)
 

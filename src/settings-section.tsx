@@ -1,15 +1,15 @@
 // Calm's settings section: scene tiles with live previews drawn by the real
 // scene code, and an evening control over a small dusk strip.
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { experimental_useCodeTheme } from "@get-bb/plugin-sdk/app";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Mood } from "./mood";
 import { useReducedMotion } from "./motion";
-import { SCENES } from "./scenes";
-import { SUN, beginFrame, endFrame, sprite, sunColor } from "./scenes/common";
+import { useThemeMode } from "./compat";
+import { SCENES, sceneFor } from "./scenes";
+import { SUN, beginFrame, endFrame, sprite, sunColor } from "./kit/common";
 import { runOnClock } from "./clock";
 import { GlowLayer } from "./glow";
-import type { Scene, SceneInstance, ThemeMode } from "./scenes/types";
-import { EVENING_CHOICES, type Feature, type SceneChoice } from "./settings";
+import type { Scene, SceneInstance, ThemeMode } from "./kit/types";
+import { EVENING_CHOICES, type Feature, type SceneChoice, type SceneId } from "./settings";
 import { usePrefs } from "./use-prefs";
 
 const STEP_EVERY = 2.4;   // seconds between pretend agent steps in a preview
@@ -20,6 +20,19 @@ const CAPTIONS: Record<string, string> = {
   pasture: "A sheep hops the stile on each step.",
   sea: "A fish jumps on each step.",
   night: "A shooting star on each step.",
+  balloons: "The burner flares on each step.",
+  pond: "A frog leaps to a lily pad on each step.",
+  train: "A puff of steam on each step.",
+  garden: "A flower blooms on each step.",
+  campfire: "Sparks fly up on each step.",
+  underwater: "A clam shows its pearl on each step.",
+  village: "A snowball flies on each step.",
+  mountain: "A marmot pops up on each step.",
+  kites: "The kite loops the loop on each step.",
+  desert: "A dash in a puff of dust on each step.",
+  city: "A window lights up on each step.",
+  lighthouse: "A wave crashes on the rocks on each step.",
+  space: "A slow somersault on each step.",
 };
 
 // What every preview shares: the theme and motion setting, kept current by
@@ -27,11 +40,18 @@ const CAPTIONS: Record<string, string> = {
 const view = { theme: "light" as ThemeMode, reduced: false, muted: "#888" };
 
 /**
- * A live tile preview, drawn by the real scene code on the shared clock.
- * Given `cycle`, it plays the scenes in turn, each for `cycle` seconds, the
- * way "a new one each time" moves to the next scene on every run.
+ * A tile preview, drawn by the real scene code on the shared clock. It
+ * animates only while `live` (the tile under the pointer, focused, or
+ * chosen); otherwise it shows one still frame, mid-action, and costs nothing.
+ * Tiles out of view get no frames at all. Given `cycle`, it plays the scenes
+ * in turn, each for `cycle` seconds, the way "a new one each time" changes
+ * scene on every run.
  */
-function ScenePreview({ scene, cycle, onTurn }: { scene: Scene | readonly Scene[]; cycle?: number; onTurn?: (i: number) => void }) {
+function ScenePreview({ scene, cycle, onTurn, live = true }: { scene: Scene | readonly Scene[]; cycle?: number; onTurn?: (i: number) => void; live?: boolean }) {
+  const liveRef = useRef(live);
+  liveRef.current = live;
+  const runRef = useRef<{ wake(): void } | null>(null);
+  useEffect(() => { runRef.current?.wake(); }, [live]);
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const skyRef = useRef<HTMLDivElement>(null);
@@ -50,11 +70,24 @@ function ScenePreview({ scene, cycle, onTurn }: { scene: Scene | readonly Scene[
     start(0);
     let turn = 0, inst = insts[0];
     let age = 0, nextStep = 0.8 + Math.random();
+    let stillWidth = 0;   // the width the still frame was drawn at
     const glow = skyRef.current ? new GlowLayer(skyRef.current, 0) : null;
     const run = runOnClock(wrap, (dt) => {
       const W = Math.max(60, Math.floor(wrap.clientWidth / PREVIEW_SCALE));
       const cw = W * PREVIEW_SCALE;
       if (canvas.width !== cw || canvas.height !== PREVIEW_HEIGHT) { canvas.width = cw; canvas.height = PREVIEW_HEIGHT; canvas.style.width = `${cw}px`; }
+      if (!liveRef.current && !cycle) {
+        // Not live: one still frame, mid-action, then nothing until it goes live.
+        if (stillWidth === cw) return "still";
+        stillWidth = cw;
+        for (let i = 0; i < 45; i++) inst.update(1 / 30);
+        if (!view.reduced) { inst.step(); for (let i = 0; i < 6; i++) inst.update(1 / 30); }
+        beginFrame();
+        inst.draw(ctx, { width: cw, dpr: 1, theme: view.theme, muted: view.muted, reducedMotion: view.reduced, now: Date.now(), duskMinutes: 40, scale: PREVIEW_SCALE });
+        glow?.update(endFrame().glow, cw, PREVIEW_HEIGHT, inst.focusX(), 0, true);
+        return "still";
+      }
+      stillWidth = 0;
       age += dt;
       if (cycle && !view.reduced) {
         const t = Math.floor(age / cycle) % insts.length;
@@ -69,8 +102,9 @@ function ScenePreview({ scene, cycle, onTurn }: { scene: Scene | readonly Scene[
       if (cycle && !view.reduced) return "fast";   // keep time for the next turn
       return view.reduced ? "still" : inst.motion();
     });
+    runRef.current = run;
     previewClocks.add(run);
-    return () => { run.stop(); previewClocks.delete(run); };
+    return () => { run.stop(); previewClocks.delete(run); runRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene, cycle]);
   return (
@@ -82,28 +116,49 @@ function ScenePreview({ scene, cycle, onTurn }: { scene: Scene | readonly Scene[
 }
 const previewClocks = new Set<{ wake(): void }>();
 
-/** The "a new one each time" preview: the scenes in turn, with a dot for each. */
-function CyclePreview({ reduced }: { reduced: boolean }) {
+/** The "a new one each time" preview: one sample order from the shuffled bag, in turn. */
+function CyclePreview({ reduced, excluded }: { reduced: boolean; excluded: readonly string[] }) {
   const [turn, setTurn] = useState(0);
-  if (reduced) {
-    return (
-      <span className="calm-trio calm-cycle-still">
-        {SCENES.map((s, i) => (
-          <span key={s.id} className="calm-cycle-step">
-            <ScenePreview scene={s} />
-            {i < SCENES.length - 1 && <span className="calm-cycle-arrow" aria-hidden="true">→</span>}
-          </span>
-        ))}
-      </span>
-    );
-  }
+  const key = excluded.join(",");
+  const bag = useMemo(() => {
+    const mix = SCENES.filter((s) => !excluded.includes(s.id));
+    return mix.map((_, i) => sceneFor("preview", "each-run", i + 1, excluded));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  if (reduced) return <ScenePreview scene={bag[0]} live={false} />;
   return (
     <span className="calm-cycle">
-      <ScenePreview scene={SCENES} cycle={4} onTurn={setTurn} />
-      <span className="calm-cycle-dots" aria-hidden="true">
-        {SCENES.map((s, i) => <span key={s.id} className={i === turn ? "on" : ""}>{s.name}</span>)}
-      </span>
+      <ScenePreview key={key} scene={bag} cycle={4} onTurn={setTurn} />
+      <span className="calm-cycle-now" aria-hidden="true">Now: {bag[turn % bag.length]?.name} · {bag.length} in the mix</span>
     </span>
+  );
+}
+
+/** One scene in the grid: pick it, or leave it out of the random mix. */
+function SceneTile({ scene, chosen, inMix, canLeave, onPick, onMix }: {
+  scene: Scene; chosen: boolean; inMix: boolean; canLeave: boolean; onPick: () => void; onMix: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div className={`calm-scene${chosen ? " calm-scene-chosen" : ""}`} onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)}>
+      <button type="button" className="calm-scene-pick" aria-pressed={chosen} onClick={onPick} onFocus={() => setHover(true)} onBlur={() => setHover(false)}>
+        <span className="calm-scene-name">{scene.name}{chosen && <span className="calm-tile-check" aria-hidden="true"> ✓</span>}</span>
+        <ScenePreview scene={scene} live={hover || chosen} />
+        <span className="calm-scene-caption">{CAPTIONS[scene.id] ?? ""}</span>
+      </button>
+      <button
+        type="button"
+        role="switch"
+        className="calm-mix"
+        aria-checked={inMix}
+        aria-label={`${scene.name} in the random mix`}
+        title={inMix ? (canLeave ? "In the random mix. Click to leave it out." : "The last scene in the mix stays in.") : "Left out of the random mix. Click to add it back."}
+        disabled={inMix && !canLeave}
+        onClick={onMix}
+      >
+        <span aria-hidden="true">{inMix ? "●" : "○"}</span>
+      </button>
+    </div>
   );
 }
 
@@ -159,19 +214,20 @@ function DuskStrip({ minutes, theme }: { minutes: number; theme: ThemeMode }) {
 }
 
 const FEATURE_ROWS: [Feature, string, string][] = [
-  ["home", "Home screen", "A still picture of the scene and today's runs on bb's home screen."],
-  ["crew", "Crew in scenes", "Child threads join the scene as sheep, boats, or stars."],
+  ["crew", "Crew in scenes", "Child threads join the scene as small figures in their own colors."],
   ["alert", "Helper alert", "A small scene when a helper waits on you or fails while the main agent rests."],
-  ["surprises", "Rare surprises", "Now and then on long runs, a fox, a whale, or a comet."],
-  ["taps", "Tap reactions", "Tap a sheep, boat, or star for a small silent reaction."],
+  ["surprises", "Rare surprises", "Now and then on long runs, a rare visitor: a fox, a whale, a heron."],
+  ["gags", "Little gags", "Every few minutes of work, a short silly moment: a sheep sneezes, the cat nudges a flowerpot."],
+  ["taps", "Tap reactions", "Tap a creature in the scene for a small silent reaction."],
   ["ambient", "Time of day and seasons", "The light follows your clock, and each season adds a touch."],
   ["header", "Thread header control", "A small button in each thread to turn Calm off there or pin a scene."],
+  ["still", "Still pictures", "Every scene shows a still picture of its moment, with no motion, whatever your system's motion setting."],
 ];
 
 export function CalmSettings() {
   const { prefs, save } = usePrefs();
-  const theme: ThemeMode = experimental_useCodeTheme().mode;
-  const reduced = useReducedMotion();
+  const theme: ThemeMode = useThemeMode();
+  const reduced = useReducedMotion(prefs.features.still);
   const mutedRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -185,6 +241,7 @@ export function CalmSettings() {
     setError("");
     save(change).catch((e) => setError(e instanceof Error ? e.message : "Could not save. Try again."));
   };
+  const mix = SCENES.filter((s) => !prefs.excluded.includes(s.id as SceneId));
   const tile = (id: SceneChoice, name: string, body: ReactNode, caption: string, wide = false) => (
     <button
       key={id}
@@ -205,21 +262,35 @@ export function CalmSettings() {
   return (
     <div className="calm-settings" ref={mutedRef}>
       <div className="calm-tiles" role="group" aria-label="Scene">
-        {SCENES.map((s) => tile(s.id as SceneChoice, s.name, <ScenePreview scene={s} />, CAPTIONS[s.id] ?? ""))}
-        {tile(
-          "each-thread",
-          "A different one each thread",
-          <span className="calm-trio">{SCENES.map((s) => <ScenePreview key={s.id} scene={s} />)}</span>,
-          "Each thread gets one of the three and always keeps it.",
-          true,
-        )}
         {tile(
           "each-run",
           "A new one each time",
-          <CyclePreview reduced={reduced} />,
-          "Every new run moves to the next scene: Pasture, then Sea, then Night sky. Never mid-run.",
-          true,
+          <CyclePreview reduced={reduced} excluded={prefs.excluded} />,
+          "Every new run picks a scene at random. None repeats until all have shown, and it never changes mid-run.",
         )}
+        {tile(
+          "each-thread",
+          "A different one each thread",
+          <span className="calm-trio">{mix.slice(0, 3).map((s) => <ScenePreview key={s.id} scene={s} live={false} />)}</span>,
+          "Each thread gets a scene from the mix and always keeps it.",
+        )}
+      </div>
+      <div className="calm-heading-row">
+        <span className="calm-sub">Or always show one scene.</span>
+        <span className="calm-sub"><span aria-hidden="true">●</span> in the random mix</span>
+      </div>
+      <div className="calm-grid" role="group" aria-label="Scenes">
+        {SCENES.map((s) => (
+          <SceneTile
+            key={s.id}
+            scene={s}
+            chosen={prefs.scene === s.id}
+            inMix={!prefs.excluded.includes(s.id as SceneId)}
+            canLeave={mix.length > 1}
+            onPick={() => choose({ scene: s.id as SceneChoice })}
+            onMix={() => choose({ excluded: prefs.excluded.includes(s.id as SceneId) ? prefs.excluded.filter((x) => x !== s.id) : [...prefs.excluded, s.id as SceneId] })}
+          />
+        ))}
       </div>
 
       <div className="calm-features" role="group" aria-labelledby="calm-features-heading">

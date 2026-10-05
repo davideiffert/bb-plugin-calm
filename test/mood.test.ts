@@ -83,19 +83,19 @@ describe("a new one each time", () => {
   it("keeps the run's scene through the close-out and moves on only at the next run", () => {
     const pick = (run: number) => sceneFor("t", "each-run", run);
     let lock: SceneLock | null = null;
-    // Run 1 opens on the Pasture.
+    // Run 1 opens on its scene.
     lock = lockScene(lock, pick(1), "each-run", false);
     lock = lockScene(lock, pick(1), "each-run", true);
-    expect(lock.scene.id).toBe("pasture");
+    expect(lock.scene.id).toBe(pick(1).id);
     // The run ends: idle lands before the composer stops. The served mood
     // changed since the run began, so it is not mistaken for a new run.
     expect(isStale(true, "idle:60000:1", "idle:0:0")).toBe(false);
     // Even if a later run number showed up while closing, the scene holds.
     lock = lockScene(lock, pick(2), "each-run", true);
-    expect(lock.scene.id).toBe("pasture");
-    // Fully closed, then the next run starts: the Sea.
+    expect(lock.scene.id).toBe(pick(1).id);
+    // Fully closed, then the next run starts: the next scene from the bag.
     lock = lockScene(lock, pick(2), "each-run", false);
-    expect(lock.scene.id).toBe("sea");
+    expect(lock.scene.id).toBe(pick(2).id);
   });
 
   it("still switches right away when the setting changes", () => {

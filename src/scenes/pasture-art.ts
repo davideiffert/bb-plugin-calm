@@ -1,7 +1,7 @@
 // Pixel art for the Pasture. One character per pixel; "." is empty.
 // Letters map to palette entries below.
 
-import type { Sprite } from "./common";
+import type { Sprite } from "../kit/common";
 
 export const SHEEP = {
   walk1: [

@@ -29,13 +29,14 @@ describe("helper alert", () => {
 });
 
 describe("helper mini scene", async () => {
-  const { Vignette, MAX_FIGURES, VIGNETTE_SCALE } = await import("../src/helper-vignette");
+  const { AlertScene, MAX_FIGURES, VIGNETTE_SCALE } = await import("../src/kit/alert");
+  const { SCENES } = await import("../src/scenes");
   it("shows up to three figures, waiting first, and a tap on one opens that helper", () => {
     const alert = helperAlert([m("a", "error"), m("b", "waiting"), m("c", "waiting"), m("d", "error")])!;
     for (const scene of ["pasture", "sea", "night"]) {
-      const v = new Vignette(scene);
+      const v = new AlertScene(scene, SCENES.find((s) => s.id === scene)!.alert);
       v.set(alert.members);
-      expect(v.figures.map((f) => f.member.id)).toEqual(["b", "c", "a"].slice(0, MAX_FIGURES));
+      expect(v.figures.map((f: { member: { id: string } }) => f.member.id)).toEqual(["b", "c", "a"].slice(0, MAX_FIGURES));
       const second = v.figures[1];
       expect(v.hit((second.x + second.w / 2) * VIGNETTE_SCALE)?.id).toBe("c");
       expect(v.motion(true)).toBe("still");

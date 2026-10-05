@@ -1,13 +1,13 @@
-// Calm's settings, each thread's own choice, and today's numbers: read once,
+// Calm's settings and each thread's own choice: read once,
 // then kept live across windows. A live update that lands while the first
 // read is still out is newer, so the read never overwrites it.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRealtime, useRealtimeConnectionState, useRpc } from "@get-bb/plugin-sdk/app";
 import type { ThreadPrefsSignal, rpcContract } from "../server";
-import { options } from "./scenes/common";
+import { options } from "./kit/common";
 import {
   DEFAULT_PREFS, DEFAULT_THREAD_PREFS, cleanPrefs, cleanThreadPrefs,
-  type DayStats, type Features, type Prefs, type ThreadPrefs,
+  type Features, type Prefs, type ThreadPrefs,
 } from "./settings";
 
 export type PrefsChange = Partial<Omit<Prefs, "features">> & { features?: Partial<Features> };
@@ -27,8 +27,9 @@ export function usePrefs(): { prefs: Prefs; save: (change: PrefsChange) => Promi
   // The scenes read these page-wide switches as they draw.
   useEffect(() => {
     options.surprises = prefs.features.surprises;
+    options.gags = prefs.features.gags;
     options.ambient = prefs.features.ambient;
-  }, [prefs.features.surprises, prefs.features.ambient]);
+  }, [prefs.features.surprises, prefs.features.gags, prefs.features.ambient]);
   const save = useCallback(async (change: PrefsChange) => {
     const mine = ++version.current;
     setPrefs((p) => ({ ...p, ...change, features: { ...p.features, ...change.features } }));   // show the choice at once
@@ -87,29 +88,4 @@ export function useThreadPrefs(threadId: string): {
   }, [rpc, threadId, state]);
   const threadPrefs = state.threadId === threadId ? state.prefs : DEFAULT_THREAD_PREFS;
   return { threadPrefs, saveThread, error };
-}
-
-export function useDayStats(): DayStats | null {
-  const rpc = useRpc<typeof rpcContract>();
-  const connection = useRealtimeConnectionState();
-  const [stats, setStats] = useState<DayStats | null>(null);
-  const [day, setDay] = useState(0);   // bumps to read again
-  const version = useRef(0);
-  // A page left open overnight starts the new day at zero: read again when the
-  // bb host's day ends (it says when), and whenever the page comes back.
-  useEffect(() => {
-    const ends = stats?.nextDayAt;
-    const t = ends ? setTimeout(() => setDay((d) => d + 1), Math.max(1000, ends - Date.now() + 5000)) : 0;
-    const back = () => { if (!document.hidden) setDay((d) => d + 1); };
-    document.addEventListener("visibilitychange", back);
-    return () => { if (t) clearTimeout(t); document.removeEventListener("visibilitychange", back); };
-  }, [stats?.nextDayAt]);
-  useEffect(() => {
-    let live = true;
-    const asked = version.current;
-    rpc.call("stats_get", null).then((s) => { if (live && version.current === asked) setStats(s); }, () => {});
-    return () => { live = false; };
-  }, [rpc, connection, day]);
-  useRealtime("stats", (payload) => { version.current++; setStats(payload as DayStats); });
-  return stats;
 }

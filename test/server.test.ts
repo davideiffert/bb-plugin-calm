@@ -2,59 +2,7 @@
 // plugin API: events go in, realtime messages and RPC answers come out.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import plugin from "../server";
-
-interface Row { seq: number; createdAt: number; data: { item: { type: string } } }
-
-function fakeBb() {
-  const handlers = new Map<string, ((e: any) => unknown)[]>();
-  const published: { channel: string; payload: any }[] = [];
-  const kv = new Map<string, unknown>();
-  const kvFail = { on: false };
-  let children: ReturnType<typeof thread>[] = [];
-  let listGate: Promise<void> = Promise.resolve();
-  let listed: () => void = () => {};
-  let rpc: Record<string, (input: any) => any> = {};
-  const rows: Row[] = [];
-  const fail = { pages: new Set<number>() };   // which events.list calls throw, by call number
-  let calls = 0;
-  const thread = (id: string, status = "active", parentThreadId: string | null = null) =>
-    ({ id, status, parentThreadId, title: id, titleFallback: null, archivedAt: null });
-  const bb = {
-    events: { on: (name: string, fn: (e: any) => unknown) => handlers.set(name, [...(handlers.get(name) ?? []), fn]) },
-    realtime: { publish: (channel: string, payload: unknown) => published.push({ channel, payload }) },
-    storage: { kv: { get: async (k: string) => kv.get(k), set: async (k: string, v: unknown) => { if (kvFail.on) throw new Error("disk"); kv.set(k, v); } } },
-    rpc: { register: (_c: unknown, h: typeof rpc) => { rpc = h; } },
-    background: { schedule: () => {}, service: () => {} },
-    log: { debug: () => {}, warn: () => {}, info: () => {}, error: () => {} },
-    sdk: { threads: {
-      get: async ({ threadId }: { threadId: string }) => thread(threadId),
-      list: async () => { listed(); await listGate; return children; },
-      interactions: { list: async () => [] },
-      events: { list: async (q: { afterSeq?: string; beforeSeq?: string; order: string; limit: string }) => {
-        const n = calls++;
-        if (fail.pages.has(n)) throw new Error("network");
-        let r = rows.slice();
-        if (q.afterSeq) r = r.filter((x) => x.seq > Number(q.afterSeq));
-        if (q.beforeSeq) r = r.filter((x) => x.seq < Number(q.beforeSeq));
-        if (q.order === "desc") r.reverse();
-        return r.slice(0, Number(q.limit));
-      } },
-    } },
-  };
-  const emit = async (name: string, e: unknown) => { for (const fn of handlers.get(name) ?? []) await fn(e); };
-  return {
-    bb, emit, published, rows, fail, thread, kvFail,
-    get rpc() { return rpc; }, get calls() { return calls; },
-    setChildren: (c: ReturnType<typeof thread>[]) => { children = c; },
-    /** Hold the next crew read open; resolves `started` once bb has been asked. */
-    holdList: () => {
-      let open!: () => void;
-      listGate = new Promise((r) => { open = r; });
-      const started = new Promise<void>((r) => { listed = r; });
-      return { open: () => open(), started };
-    },
-  };
-}
+import { fakeBb, type Row } from "./fake-bb";
 
 const step = (seq: number, at = Date.now()): Row => ({ seq, createdAt: at, data: { item: { type: "toolCall" } } });
 const stepsOf = (f: ReturnType<typeof fakeBb>, id: string) =>
@@ -145,14 +93,5 @@ describe("server step counting", () => {
     await f.emit("thread.archived", { thread: f.thread("t") });
     await vi.runAllTimersAsync();
     expect(f.published.slice(before).filter((p) => p.channel === "step")).toHaveLength(0);
-  });
-
-  it("counts today's runs and hops for the home screen", async () => {
-    const f = await watchedRun();
-    f.rows.push(step(1), step(2));
-    await f.emit("experimental_thread.events", { thread: f.thread("t"), sequence: 2 });
-    await vi.runAllTimersAsync();
-    const today = await f.rpc.stats_get(null);
-    expect(today).toMatchObject({ runs: 1, hops: 2, lastThreadId: "t" });
   });
 });

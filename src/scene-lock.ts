@@ -2,7 +2,7 @@
 // it, but the strip holds on to the scene it opened with until it has fully
 // closed, so the close-out never shows the next run's scene.
 import { RESUME_MS, type Mood } from "./mood";
-import type { Scene } from "./scenes/types";
+import type { Scene } from "./kit/types";
 
 export interface SceneLock {
   scene: Scene;

@@ -3,8 +3,9 @@
 import type { Mood } from "../mood";
 import type { DrawContext, ThemeMode } from "./types";
 
-export const SCALE = 3;          // CSS pixels per art pixel
-export const H = 16;             // art rows
+import { AMBER, RAIN, ROWS, SCALE } from "./style";
+export { SCALE };
+export const H = ROWS;           // art rows
 export const STEP_DEBOUNCE = 1.7; // at most one step reaction per this many seconds
 
 /**
@@ -16,6 +17,8 @@ export const options = {
   surprises: true,
   /** Light that follows the local time of day, and a touch for each season. */
   ambient: true,
+  /** Little comedic gags while the agent works. */
+  gags: true,
 };
 
 export type Sprite = readonly string[];
@@ -137,7 +140,7 @@ export function crewMarker(v: CanvasRenderingContext2D, view: DrawContext, kind:
   if (kind === "waiting") {
     const on = view.reducedMotion ? 1 : 0.55 + 0.45 * Math.sin(t * Math.PI * 1.6);
     v.globalAlpha = on;
-    v.fillStyle = "#f5a524";
+    v.fillStyle = AMBER;
     v.fillRect(px(x), px(y), s, 3 * s);
     v.fillRect(px(x), px(y + 4), s, s);
     v.globalAlpha = 1;
@@ -176,9 +179,44 @@ export class SurpriseClock {
 }
 
 
+/**
+ * When the next little gag may play: only while working, about once every
+ * 3 to 5 minutes of watched work, and never while another gag or a surprise
+ * plays. It also rotates through each scene's gags, so the same one never
+ * plays twice in a row. One per thread, so the timing survives new runs and
+ * new scenes.
+ */
+let gagClocks = 0;
+export class GagClock {
+  // Its own random numbers, so a scene's Math.random sequence (and the parity
+  // harness's seeded one) is never shifted by the gag schedule.
+  private rnd = seeded(Date.now() ^ (++gagClocks * 7919));
+  private working = 0;
+  private wait = this.next();
+  private last = new Map<string, number>();
+  private next() { return 180 + this.rnd() * 120; }
+  tick(dt: number, kind: string, reduced: boolean, busy: boolean): boolean {
+    if (kind !== "working" || reduced || !options.gags) return false;
+    this.working += dt;
+    if (busy || this.working < this.wait) return false;
+    this.working = 0;
+    this.wait = this.next();
+    return true;
+  }
+  /** Which of a scene's `n` gags plays next: never the one that played last. */
+  pick(sceneId: string, n: number): number {
+    const last = this.last.get(sceneId);
+    const i = n <= 1 ? 0 : last === undefined ? Math.floor(this.rnd() * n) : (last + 1 + Math.floor(this.rnd() * (n - 1))) % n;
+    this.last.set(sceneId, i);
+    return i;
+  }
+  /** Note a gag that was started by hand, so the rotation moves past it. */
+  played(sceneId: string, i: number) { this.last.set(sceneId, i); }
+}
+
 export const SUN: Sprite = [".yyy.", "yyyyy", "yyyyy", "yyyyy", ".yyy."];
 /** The sun warms and reddens as the evening goes on. */
-export const sunColor = (e: number) => (e < 0.5 ? "#f2b13a" : e < 0.8 ? "#ef8a3a" : "#e0604a");
+export const sunColor = (e: number) => (e < 0.5 ? "#f6d26a" : e < 0.8 ? "#ef8a3a" : "#e0604a");
 
 export const CLOUD: Sprite = [
   "....gggg.....",
@@ -189,8 +227,8 @@ export const CLOUD: Sprite = [
 ];
 
 export const CLOUD_COLORS: Record<ThemeMode, { g: string; d: string }> = {
-  light: { g: "#a3a6b0", d: "#4f7fd6" },
-  dark: { g: "#7d808b", d: "#7fa7e8" },
+  light: { g: RAIN.light.cloud, d: RAIN.light.drop },
+  dark: { g: RAIN.dark.cloud, d: RAIN.dark.drop },
 };
 
 /** The error cloud: a small grey cloud raining over `x` (art px). */
@@ -242,6 +280,8 @@ export interface Label {
   weight: number;
   mono: boolean;
   alpha: number;
+  /** Drawn on a small page-colored plate, so it stays clear of the art. */
+  plate?: boolean;
 }
 
 const frame = { labels: [] as Label[], glow: [] as Hsla[] };
@@ -347,12 +387,13 @@ export function floatNote(_v: CanvasRenderingContext2D, view: DrawContext, text:
   });
 }
 
-/** The rate-limit sign at `x` (art px), aligned to that edge. */
-export function rateSign(
-  _v: CanvasRenderingContext2D, view: DrawContext, mood: Mood, x: number, align: "left" | "right" = "right",
-) {
+/**
+ * The rate-limit sign: always in the same slot, the strip's top-left corner,
+ * on a small plate so it never sits on the art, in the tap notes' type.
+ */
+export function rateSign(_v: CanvasRenderingContext2D, view: DrawContext, mood: Mood) {
   const text = mood.resetsAt ? `back at ${formatTime(mood.resetsAt)}` : "resting";
-  frame.labels.push({ text, x: x * cssScale(view), y: 15, align, anchor: "baseline", size: 11, weight: 400, mono: true, alpha: 1 });
+  frame.labels.push({ text, x: 3 * cssScale(view), y: 2, align: "left", anchor: "top", size: 10, weight: 600, mono: false, alpha: 1, plate: true });
 }
 
 /**

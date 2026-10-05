@@ -1,18 +1,19 @@
+import { make, type Probe } from "./probe";
 import { describe, expect, it } from "vitest";
-import { Pasture } from "../src/scenes/pasture";
+import { pasture } from "../src/scenes/pasture";
 import type { Mood, MoodKind } from "../src/mood";
 
 const mood = (kind: MoodKind): Mood => ({ kind, turnStartedAt: 0, resetsAt: null, since: 0 });
 type Inner = { sheep: { x: number; tx: number; hop: unknown }[]; penX: number; fenceX: number };
-const inner = (p: Pasture) => p as unknown as Inner;
+const inner = (p: Probe) => p as unknown as Inner;
 
 function field(kind: MoodKind = "working") {
-  const p = new Pasture();
+  const p = make(pasture);
   p.layout(900);
   p.setMood(mood(kind));
   return p;
 }
-const advance = (p: Pasture, seconds: number) => { for (let t = 0; t < seconds; t += 1 / 30) p.update(1 / 30); };
+const advance = (p: Probe, seconds: number) => { for (let t = 0; t < seconds; t += 1 / 30) p.update(1 / 30); };
 
 describe("Pasture", () => {
   it("sends one sheep over the stile per step, and ignores a burst", () => {
@@ -52,7 +53,7 @@ describe("Pasture", () => {
   });
 
   it("uses a smaller flock on a phone-width strip", () => {
-    const p = new Pasture();
+    const p = make(pasture);
     p.layout(300);
     expect(inner(p).sheep).toHaveLength(2);
   });

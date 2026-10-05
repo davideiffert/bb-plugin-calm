@@ -1,11 +1,12 @@
+import { make, type Probe } from "./probe";
 import { describe, expect, it } from "vitest";
-import { Pasture } from "../src/scenes/pasture";
-import { Sea } from "../src/scenes/sea";
-import { Night } from "../src/scenes/night";
-import { SurpriseClock, clockEvening, evening, seasonOf } from "../src/scenes/common";
+import { pasture } from "../src/scenes/pasture";
+import { sea } from "../src/scenes/sea";
+import { night } from "../src/scenes/night";
+import { SurpriseClock, clockEvening, evening, seasonOf } from "../src/kit/common";
 import type { CrewMember } from "../src/crew";
 import type { Mood, MoodKind } from "../src/mood";
-import type { DrawContext, SceneInstance } from "../src/scenes/types";
+import type { DrawContext, SceneInstance } from "../src/kit/types";
 
 const mood = (kind: MoodKind, turnStartedAt: number | null = null): Mood => ({ kind, turnStartedAt, resetsAt: null, since: 0 });
 const member = (id: string, kind: MoodKind = "working"): CrewMember => ({ id, kind, title: `Child ${id}` });
@@ -57,9 +58,9 @@ type Crewed = { crew?: { id: string; leaving: boolean }[]; fleet?: { id: string;
 const members = (s: SceneInstance) => { const i = s as unknown as Crewed; return (i.crew ?? i.fleet)!; };
 const extra = (s: SceneInstance) => { const i = s as unknown as Crewed; return i.crewExtra ?? i.fleetExtra ?? 0; };
 
-for (const [name, make, cap] of [["Pasture", () => new Pasture(), 4], ["Sea", () => new Sea(), 4], ["Night", () => new Night(), 6]] as const) {
+for (const [name, build, cap] of [["Pasture", () => make(pasture), 4], ["Sea", () => make(sea), 4], ["Night", () => make(night), 6]] as const) {
   describe(`${name} crew`, () => {
-    const scene = () => { const s = make() as SceneInstance & { layout(w: number): void }; s.layout(900); s.setMood(mood("working", Date.now())); return s; };
+    const scene = () => { const s = build() as SceneInstance & { layout(w: number): void }; s.layout(900); s.setMood(mood("working", Date.now())); return s; };
 
     it("adds a member per child, caps the count, and counts the rest", () => {
       const s = scene();
@@ -88,21 +89,21 @@ for (const [name, make, cap] of [["Pasture", () => new Pasture(), 4], ["Sea", ()
 
 describe("taps", () => {
   it("make a tapped sheep say baa and hop in place", () => {
-    const p = new Pasture(); p.layout(900); p.setMood(mood("working", Date.now()));
-    const sheep = (p as unknown as { sheep: { x: number; baa: number | null; hop: unknown }[] }).sheep;
+    const p = make(pasture); p.layout(900); p.setMood(mood("working", Date.now()));
+    const sheep = (p as unknown as { sheep: { x: number; hop: unknown }[] }).sheep;
     const target = sheep[0];
     const hit = p.hit((target.x + 6) * 3, 10 * 3);
     expect(hit?.target).toBe("flock");
     p.poke(hit!);
-    expect(target.baa).toBe(0);
+    expect(p.reaction(target)).toBe(0);
     expect(target.hop).not.toBeNull();
   });
   it("ring the boat's bell", () => {
-    const s = new Sea(); s.layout(900); s.setMood(mood("working", Date.now()));
+    const s = make(sea); s.layout(900); s.setMood(mood("working", Date.now()));
     const x = (s as unknown as { x: number }).x;
     const hit = s.hit((x + 7) * 3, 6 * 3);
     expect(hit?.target).toBe("lead");
     s.poke(hit!);
-    expect((s as unknown as { bell: number | null }).bell).toBe(0);
+    expect((s as unknown as { reaction(k: string): number | null }).reaction("boat")).toBe(0);
   });
 });
