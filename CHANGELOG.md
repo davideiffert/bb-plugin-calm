@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2
+
+- Removed the dark band that showed above an open scene. The prompt box's
+  shadow fade now stays hidden while the scene strip is open, so the scene
+  sits cleanly on the page. When the strip closes, the fade returns.
+
 ## 1.1.1
 
 First public release.
