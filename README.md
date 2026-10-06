@@ -17,7 +17,7 @@ It has a job, too. An amber light means your agent needs you. A little rain clou
 Requires bb 0.45 or later. Runs inside your bb, with no external service or account.
 
 ```sh
-bb plugin install git:https://github.com/davideiffert/bb-plugin-calm@^1.1.0
+bb plugin install git:https://github.com/davideiffert/bb-plugin-calm@^1.1.1
 ```
 
 Open a thread and send a message. Calm appears above the prompt box while the agent works.
