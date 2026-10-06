@@ -129,7 +129,7 @@ function CyclePreview({ reduced, excluded }: { reduced: boolean; excluded: reado
   return (
     <span className="calm-cycle">
       <ScenePreview key={key} scene={bag} cycle={4} onTurn={setTurn} />
-      <span className="calm-cycle-now" aria-hidden="true">Now: {bag[turn % bag.length]?.name} · {bag.length} in the mix</span>
+      <span className="calm-cycle-now" aria-hidden="true">Now: {bag[turn % bag.length]?.name}</span>
     </span>
   );
 }
@@ -146,18 +146,17 @@ function SceneTile({ scene, chosen, inMix, canLeave, onPick, onMix }: {
         <ScenePreview scene={scene} live={hover || chosen} />
         <span className="calm-scene-caption">{CAPTIONS[scene.id] ?? ""}</span>
       </button>
-      <button
-        type="button"
-        role="switch"
-        className="calm-mix"
-        aria-checked={inMix}
-        aria-label={`${scene.name} in the random mix`}
-        title={inMix ? (canLeave ? "In the random mix. Click to leave it out." : "The last scene in the mix stays in.") : "Left out of the random mix. Click to add it back."}
-        disabled={inMix && !canLeave}
-        onClick={onMix}
-      >
-        <span aria-hidden="true">{inMix ? "●" : "○"}</span>
-      </button>
+      <label className="calm-mix">
+        <input
+          type="checkbox"
+          checked={inMix}
+          aria-label={`${scene.name} in the mix`}
+          title={inMix && !canLeave ? "Keep at least one scene in the mix." : undefined}
+          disabled={inMix && !canLeave}
+          onChange={onMix}
+        />
+        <span>In the mix</span>
+      </label>
     </div>
   );
 }
@@ -264,20 +263,20 @@ export function CalmSettings() {
       <div className="calm-tiles" role="group" aria-label="Scene">
         {tile(
           "each-run",
-          "A new one each time",
+          "A new scene each run",
           <CyclePreview reduced={reduced} excluded={prefs.excluded} />,
-          "Every new run picks a scene at random. None repeats until all have shown, and it never changes mid-run.",
+          "Every new run draws the next scene from the mix. Each scene shows once before any repeats, and it never changes mid-run.",
         )}
         {tile(
           "each-thread",
-          "A different one each thread",
+          "One scene per thread",
           <span className="calm-trio">{mix.slice(0, 3).map((s) => <ScenePreview key={s.id} scene={s} live={false} />)}</span>,
-          "Each thread gets a scene from the mix and always keeps it.",
+          "Each thread draws one scene from the mix and keeps it, run after run.",
         )}
       </div>
       <div className="calm-heading-row">
         <span className="calm-sub">Or always show one scene.</span>
-        <span className="calm-sub"><span aria-hidden="true">●</span> in the random mix</span>
+        <span className="calm-sub">{mix.length} of {SCENES.length} scenes in the mix</span>
       </div>
       <div className="calm-grid" role="group" aria-label="Scenes">
         {SCENES.map((s) => (
