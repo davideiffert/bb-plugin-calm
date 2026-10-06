@@ -354,6 +354,7 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
       onPointerMove={crewOnly ? undefined : onPointerMove}
       onPointerLeave={crewOnly ? undefined : onPointerLeave}
       tabIndex={crewOnly ? undefined : 0}
+      data-open={open ? "true" : undefined}
       aria-label={crewOnly ? undefined : `Calm: ${spoken}. Details`}
       onFocus={crewOnly ? undefined : onFocus}
       onBlur={crewOnly ? undefined : onBlur}
@@ -373,7 +374,6 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
         </div>
       ) : (
         <>
-        <div className="calm-veil" aria-hidden="true" />
         <div ref={skyRef} className="calm-sky" aria-hidden="true" />
         <div className="calm-clip">
         <canvas

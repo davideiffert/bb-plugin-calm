@@ -62,13 +62,11 @@
 /* The canvas and labels stay clipped to the strip while it eases open or shut;
    the sky may reach a little above it. */
 .calm-clip { position: absolute; inset: 0; overflow: hidden; }
-/* Above the strip, chat text scrolling down dissolves into the page color
-   instead of being cut where bb's prompt area begins. It sits beneath bb's
-   own controls (z-index -1 inside the prompt area's layer) and never takes
-   clicks; if a future bb clips it, the strip simply looks as before. */
-.calm-veil { position: absolute; left: 0; right: 0; bottom: 100%; height: var(--calm-veil, 28px); z-index: -1; pointer-events: none;
-  background: var(--background, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000); mask-image: linear-gradient(to bottom, transparent, #000); }
+/* BB's prompt fade darkens the page above an open scene. Let the scene
+   meet the thread background directly; closed strips keep BB's usual fade. */
+[data-overflow-fade="above"][data-overflow-fade-tone="background"]:has(~ * .calm-strip[data-open="true"]) {
+  background: none;
+}
 /* The features list on the settings page. */
 .calm-features { display: flex; flex-direction: column; gap: 10px; }
 .calm-feature { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
