@@ -24,7 +24,7 @@ Open a thread and send a message. Calm appears above the prompt box while the ag
 
 ![Calm's Space scene between a thread conversation and the prompt box.](assets/launch/thread-context.png)
 
-*Calm sits above your prompt while the agent works. A staged conversation in bb 0.45, using the upcoming background fix.*
+*Calm sits above your prompt while the agent works. A staged conversation in bb 0.45.*
 
 [See the full app view](assets/launch/working.png).
 
