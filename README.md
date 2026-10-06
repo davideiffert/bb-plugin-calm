@@ -59,7 +59,7 @@ Open **Plugins → Installed plugins → Calm**.
 
 ![Calm's scene chooser and feature switches.](assets/launch/settings.png)
 
-Choose the scenes in your mix with the dots on their tiles. Turn off gags, surprises, tap reactions, helpers, or the time-of-day effects. **Still pictures** keeps the art still while continuing to show your agent's state. Calm also follows your system's reduced-motion setting and bb's light or dark mode.
+Choose **Edit mix**, tap scene cards to include or leave them out, then choose **Done**. Outside mix editing, tap a card to always show that scene. Turn off gags, surprises, tap reactions, helpers, or the time-of-day effects. **Still pictures** keeps the art still while continuing to show your agent's state. Calm also follows your system's reduced-motion setting and bb's light or dark mode.
 
 Use the scene icon in a thread's header to pin a scene or turn Calm off for that thread. Disable the plugin in Installed plugins to turn it off everywhere.
 

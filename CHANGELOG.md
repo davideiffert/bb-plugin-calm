@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.1
+
+First public release.
+
+- Parallel wording for scenes that change each run or stay with each thread.
+- One shared mix count, also visible with reduced motion and still pictures.
+- One Edit mix button instead of permanent controls on all sixteen cards.
+- Whole-card mix editing, visible excluded-scene labels, and a last-scene safeguard.
+- A bordered action button, active Done state, and larger phone tap target.
+- Escape exits mix editing without closing the settings panel.
+- Updated settings image and installation instructions.
+
 ## 1.1.0
 
 Prepared public launch.
