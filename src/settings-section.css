@@ -92,19 +92,26 @@
 .calm-head-dim { color: var(--muted-foreground); }
 .calm-head-error { margin: 0; font-size: 12px; color: var(--destructive, #d33); }
 /* The scene grid: two columns in bb's settings pane, four on a wide page. */
-.calm-heading-row { display: flex; justify-content: space-between; gap: 8px; margin-top: -8px; }
+.calm-heading-row { display: flex; justify-content: space-between; gap: 8px; margin-top: -8px; flex-wrap: wrap; align-items: center; }
 .calm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 @container (min-width: 760px) { .calm-grid { grid-template-columns: repeat(4, 1fr); } }
 .calm-scene { position: relative; min-width: 0; }
 .calm-scene-pick { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--canvas); color: var(--foreground); text-align: left; cursor: pointer; }
 .calm-scene-pick:hover { background: var(--surface-recessed); }
-.calm-scene-pick[aria-pressed="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
-.calm-scene-pick:focus-visible, .calm-mix input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.calm-scene-name { font-weight: 600; font-size: 13px; }
+.calm-scene-chosen .calm-scene-pick { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.calm-scene-pick:focus-visible, .calm-scene-pick:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
+.calm-scene-name { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-weight: 600; font-size: 13px; }
 .calm-scene-caption { font-size: 11px; color: var(--muted-foreground); line-height: 1.35; }
-.calm-mix { display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 10px; font-size: 12px; color: var(--muted-foreground); cursor: pointer; }
-.calm-mix input { accent-color: var(--primary); }
-.calm-mix:has(input:disabled) { cursor: default; }
+.calm-mix-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-left: auto; }
+.calm-edit-mix { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--canvas); color: var(--foreground); font-size: 13px; font-weight: 500; line-height: 1; cursor: pointer; }
+.calm-edit-mix:hover { background: var(--surface-recessed); }
+.calm-edit-mix[aria-pressed="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); font-weight: 600; }
+@container (max-width: 439px) { .calm-edit-mix { min-height: 44px; } }
+.calm-edit-mix:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.calm-scene-name input { accent-color: var(--primary); flex: none; }
+.calm-mix-tag { font-weight: 400; font-size: 11px; color: var(--muted-foreground); }
+.calm-scene-excluded .calm-preview { opacity: .45; }
+.calm-scene-excluded .calm-scene-name { color: var(--muted-foreground); }
 .calm-cycle-now { font-size: 11px; color: var(--muted-foreground); }
 /* The strip takes keyboard focus to show its details; show where focus is. */
 .calm-strip:focus { outline: none; }

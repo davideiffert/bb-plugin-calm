@@ -134,29 +134,23 @@ function CyclePreview({ reduced, excluded }: { reduced: boolean; excluded: reado
   );
 }
 
-/** One scene in the grid: pick it, or leave it out of the random mix. */
-function SceneTile({ scene, chosen, inMix, canLeave, onPick, onMix }: {
-  scene: Scene; chosen: boolean; inMix: boolean; canLeave: boolean; onPick: () => void; onMix: () => void;
+/** One card action at a time: pick a fixed scene, or edit the mix. */
+function SceneTile({ scene, chosen, inMix, editing, onPick, onMix }: {
+  scene: Scene; chosen: boolean; inMix: boolean; editing: boolean; onPick: () => void; onMix: () => void;
 }) {
   const [hover, setHover] = useState(false);
+  const contents = <>
+    <span className="calm-scene-name">
+      <span>{scene.name}{chosen && !editing && <span className="calm-tile-check" aria-hidden="true"> ✓</span>}</span>
+      {editing ? <input type="checkbox" checked={inMix} aria-label={`${scene.name} in the mix`} onChange={onMix} /> : !inMix && <span className="calm-mix-tag">Not in the mix</span>}
+    </span>
+    <ScenePreview scene={scene} live={hover || chosen} />
+    <span className="calm-scene-caption">{CAPTIONS[scene.id] ?? ""}</span>
+  </>;
   return (
-    <div className={`calm-scene${chosen ? " calm-scene-chosen" : ""}`} onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)}>
-      <button type="button" className="calm-scene-pick" aria-pressed={chosen} onClick={onPick} onFocus={() => setHover(true)} onBlur={() => setHover(false)}>
-        <span className="calm-scene-name">{scene.name}{chosen && <span className="calm-tile-check" aria-hidden="true"> ✓</span>}</span>
-        <ScenePreview scene={scene} live={hover || chosen} />
-        <span className="calm-scene-caption">{CAPTIONS[scene.id] ?? ""}</span>
-      </button>
-      <label className="calm-mix">
-        <input
-          type="checkbox"
-          checked={inMix}
-          aria-label={`${scene.name} in the mix`}
-          title={inMix && !canLeave ? "Keep at least one scene in the mix." : undefined}
-          disabled={inMix && !canLeave}
-          onChange={onMix}
-        />
-        <span>In the mix</span>
-      </label>
+    <div className={`calm-scene${chosen ? " calm-scene-chosen" : ""}${!inMix ? " calm-scene-excluded" : ""}`} onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)}>
+      {editing ? <label className="calm-scene-pick" onFocus={() => setHover(true)} onBlur={() => setHover(false)}>{contents}</label> :
+        <button type="button" className="calm-scene-pick" aria-pressed={chosen} onClick={onPick} onFocus={() => setHover(true)} onBlur={() => setHover(false)}>{contents}</button>}
     </div>
   );
 }
@@ -229,6 +223,8 @@ export function CalmSettings() {
   const reduced = useReducedMotion(prefs.features.still);
   const mutedRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
+  const [editing, setEditing] = useState(false);
+  const editRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     view.theme = theme;
     view.reduced = reduced;
@@ -259,7 +255,7 @@ export function CalmSettings() {
   );
 
   return (
-    <div className="calm-settings" ref={mutedRef}>
+    <div className="calm-settings" ref={mutedRef} onKeyDown={(e) => { if (editing && e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setEditing(false); editRef.current?.focus(); } }}>
       <div className="calm-tiles" role="group" aria-label="Scene">
         {tile(
           "each-run",
@@ -275,19 +271,22 @@ export function CalmSettings() {
         )}
       </div>
       <div className="calm-heading-row">
-        <span className="calm-sub">Or always show one scene.</span>
-        <span className="calm-sub">{mix.length} of {SCENES.length} scenes in the mix</span>
+        <span className="calm-sub">{editing ? "Tap a scene to keep it in the mix or leave it out." : "Or always show one scene."}</span>
+        <span className="calm-mix-actions">
+          <span className="calm-sub" aria-live="polite">{mix.length} of {SCENES.length} scenes in the mix</span>
+          <button ref={editRef} type="button" className="calm-edit-mix" aria-pressed={editing} onClick={() => setEditing((e) => !e)}>{editing ? "Done" : "Edit mix"}</button>
+        </span>
       </div>
-      <div className="calm-grid" role="group" aria-label="Scenes">
+      <div className="calm-grid" role="group" aria-label={editing ? "Scenes in the mix" : "Scenes"}>
         {SCENES.map((s) => (
           <SceneTile
             key={s.id}
             scene={s}
             chosen={prefs.scene === s.id}
             inMix={!prefs.excluded.includes(s.id as SceneId)}
-            canLeave={mix.length > 1}
+            editing={editing}
             onPick={() => choose({ scene: s.id as SceneChoice })}
-            onMix={() => choose({ excluded: prefs.excluded.includes(s.id as SceneId) ? prefs.excluded.filter((x) => x !== s.id) : [...prefs.excluded, s.id as SceneId] })}
+            onMix={() => { if (mix.length === 1 && !prefs.excluded.includes(s.id as SceneId)) { setError("Keep at least one scene in the mix."); return; } choose({ excluded: prefs.excluded.includes(s.id as SceneId) ? prefs.excluded.filter((x) => x !== s.id) : [...prefs.excluded, s.id as SceneId] }); }}
           />
         ))}
       </div>

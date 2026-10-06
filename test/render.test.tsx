@@ -78,6 +78,44 @@ describe("the settings section", () => {
   });
 });
 
+describe("editing the scene mix", () => {
+  const section = app.settingsSections[0]!;
+
+  it("separates mix editing from scene picking and exits with Escape from Done", async () => {
+    const saves: unknown[] = [];
+    const slot = renderSlot(section, {} as never, { rpc: rpcFor({ saves }) as never });
+    await flush();
+    expect(slot.queryByRole("checkbox", { name: "Sea in the mix" })).toBeNull();
+    fireEvent.click(slot.getByRole("button", { name: "Edit mix" }));
+    fireEvent.click(slot.getByRole("checkbox", { name: "Sea in the mix" }));
+    await flush();
+    expect(saves).toEqual([{ excluded: ["sea"] }]);
+    expect(slot.getByText("15 of 16 scenes in the mix")).toBeTruthy();
+    const done = slot.getByRole("button", { name: "Done" });
+    fireEvent.keyDown(done, { key: "Escape" });
+    expect(slot.queryByRole("checkbox", { name: "Sea in the mix" })).toBeNull();
+    expect(document.activeElement).toBe(slot.getByRole("button", { name: "Edit mix" }));
+    expect(slot.getByText("Not in the mix")).toBeTruthy();
+    slot.lifecycle.unmount();
+  });
+
+  it("keeps the last scene and explains why without disabling its control", async () => {
+    const saves: unknown[] = [];
+    const prefs = { ...DEFAULT_PREFS, excluded: SCENES.filter((s) => s.id !== "pasture").map((s) => s.id) } as Prefs;
+    const slot = renderSlot(section, {} as never, { rpc: rpcFor({ prefs, saves }) as never });
+    await flush();
+    fireEvent.click(slot.getByRole("button", { name: "Edit mix" }));
+    const last = slot.getByRole("checkbox", { name: "Pasture in the mix" }) as HTMLInputElement;
+    expect(last.disabled).toBe(false);
+    fireEvent.click(last);
+    await flush();
+    expect(last.checked).toBe(true);
+    expect(saves).toEqual([]);
+    expect(slot.getByRole("status").textContent).toBe("Keep at least one scene in the mix.");
+    slot.lifecycle.unmount();
+  });
+});
+
 describe("the strip above the prompt box", () => {
   const banner = app.composerCustomizations[0]!.banners![0]!;
   const strip = (mood: Mood, isRunning: boolean) => renderSlot(banner as never, {} as never, {
