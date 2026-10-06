@@ -1,6 +1,8 @@
+A little world above bb's prompt box while your agent works. Sixteen pixel-art scenes, a gag every few minutes, and an amber light when it needs you.
+
 ## Small adventures
 
-A sheep gets stuck on a fence. The city cat pushes a flowerpot off the ledge. A gull steals the lighthouse keeper's sandwich.
+A sheep gets stuck on a fence. The city cat knocks a flowerpot off a rooftop. A gull steals the lighthouse keeper's sandwich.
 
 Each of Calm's sixteen scenes has three short gags, with one appearing about every 3 to 5 minutes of work. They are silent, stop while the agent needs you, and can be switched off.
 
@@ -16,9 +18,9 @@ The light follows your local clock. Long runs deepen toward dusk, seasons add a 
 
 The scene plays while your agent works and reacts to completed actions. When it needs your answer, the scene holds and an amber light glows. A rain cloud marks an error. A rate limit lets the scene rest, with the return time when the provider reports it. The scene closes when the run ends.
 
-Helpers join as small figures in their own colors. Tap one for details and a silent reaction. If the main agent rests, a small alert appears only for helpers waiting on you or reporting a failure. Tap a helper in that alert to open its thread.
+Child threads join as helpers, small figures in their own colors. Tap one for details and a silent reaction. If the main agent rests, a small alert appears only for helpers waiting on you or reporting a failure. Tap a helper in that alert to open its thread.
 
-## Your kind of quiet
+## Make it yours
 
 The settings page has live scene tiles and switches for optional touches. Choose Still pictures for stationary art that continues to show the agent's state. Calm follows bb's light or dark mode and your system's reduced-motion setting, and pauses when out of sight.
 

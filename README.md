@@ -2,13 +2,13 @@
 
 A little world while your agent works.
 
-Sheep hop fences. A cat nudges a flowerpot off a rooftop. A lighthouse keeper loses his sandwich to a gull. Calm adds sixteen pixel-art scenes above [bb](https://getbb.app)'s prompt box, with small reactions as your agent works and occasional mischief along the way.
+Sheep hop fences. A cat knocks a flowerpot off a rooftop. A lighthouse keeper loses his sandwich to a gull. Calm adds sixteen pixel-art scenes above [bb](https://getbb.app)'s prompt box, with small reactions as your agent works and occasional mischief along the way.
 
 ![Calm scene animation with the pasture, city cat, lighthouse keeper, and pond.](assets/launch/hero.gif)
 
-*Gags shown together here; normally one appears every few minutes of work. These previews use Calm's scene renderer.*
+*Four scenes, with gags shown back-to-back. In real use, one appears every few minutes, with long stretches of calm between.*
 
-[Watch the short film](assets/launch/hero.mp4).
+[Watch the 17-second film](assets/launch/hero.mp4).
 
 It has a job, too. An amber light means your agent needs you. A little rain cloud means something went wrong. When the work ends, the scene disappears.
 
@@ -22,9 +22,11 @@ bb plugin install git:https://github.com/davideiffert/bb-plugin-calm@^1.1.0
 
 Open a thread and send a message. Calm appears above the prompt box while the agent works.
 
-![Calm above bb's prompt box during a demo run.](assets/launch/working.png)
+![Calm above bb's prompt box during a demo run.](assets/launch/working-detail.png)
 
-*A demo thread in bb 0.45, with no real work or accounts attached.*
+*A demo run in bb 0.45. The scene sits above the prompt box until the agent finishes.*
+
+[See the full app view](assets/launch/working.png).
 
 ## A new little world
 
@@ -34,7 +36,7 @@ By default, each run gets a new scene, with no repeats until the mix has gone th
 
 Pasture, Sea, Night sky, Balloon Fiesta, Pond, Train, Garden, Campfire, Underwater, Snowy village, Mountain trail, Kites, Desert roadrunner, City rooftop, Lighthouse, and Space.
 
-Each has three little gags. A frog misses its lily pad. A raccoon makes off with the marshmallows. An astronaut chases a wrench in slow motion. They appear about once every 3 to 5 minutes of work, only while the main agent is working. Switch them off whenever you like.
+Each has three little gags, forty-eight in all. A frog misses its lily pad. A raccoon makes off with the marshmallows. An astronaut chases a wrench in slow motion. They appear about once every 3 to 5 minutes of work, only while the main agent is working. Switch them off whenever you like.
 
 Tap a creature for a silent reaction. The light follows your local clock, long runs deepen toward dusk, and seasons add a small touch. Rare visitors drop by, too.
 
@@ -49,7 +51,7 @@ Tap a creature for a silent reaction. The light follows your local clock, long r
 | Something fails | A little rain cloud appears. |
 | The run finishes | The scene closes. |
 
-Helpers join the scene as sheep, boats, bees, or other small figures. Tap one for details and a silent reaction. When the main agent rests, a small alert appears only for helpers that need you or have failed. Tap a helper in that alert to open its thread.
+When your agent hands work to child threads, they join the scene as helpers: sheep, boats, bees, or other small figures. The settings call this **Crew in scenes**. Tap one for details and a silent reaction. When the main agent rests, a small alert appears only for helpers that need you or have failed. Tap a helper in that alert to open its thread.
 
 ## Make it yours
 
