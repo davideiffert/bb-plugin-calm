@@ -22,9 +22,9 @@ bb plugin install git:https://github.com/davideiffert/bb-plugin-calm@^1.1.1
 
 Open a thread and send a message. Calm appears above the prompt box while the agent works.
 
-![Calm above bb's prompt box during a demo run.](assets/launch/working-detail.png)
+![Calm's Space scene between a thread conversation and the prompt box.](assets/launch/thread-context.png)
 
-*A demo run in bb 0.45. The scene sits above the prompt box until the agent finishes.*
+*Calm sits above your prompt while the agent works. A staged conversation in bb 0.45, using the upcoming background fix.*
 
 [See the full app view](assets/launch/working.png).
 
