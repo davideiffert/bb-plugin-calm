@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- New **Show scenes** setting. **While the agent works** keeps today's
+  behavior and stays the default. **Always** keeps the scene up between runs,
+  playing just as it does during work, with the light following the local
+  clock. The amber light, rain cloud, and rate-limit rest work as before, and
+  **Calm off here** still turns it off for a thread.
+- With **Always** and a new scene each run, an idle strip moves to the next
+  scene in the mix every 3 minutes, with a quick fade. It never changes during
+  a run, follows the mix (every scene once before repeats, left-out scenes
+  skipped), and keeps a chosen, per-thread, or pinned scene. The timer stops
+  while the page is hidden.
+
 ## 1.1.2
 
 - Removed the dark band that showed above an open scene. The prompt box's

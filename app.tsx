@@ -1,6 +1,6 @@
 // bb-plugin-calm frontend: a bare composer banner that draws a small scene
 // above the prompt box while the viewed thread, or its crew of child threads,
-// has something to show.
+// has something to show, or all the time when scenes are set to show always.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import {
   definePluginApp,
@@ -23,10 +23,13 @@ import { usePrefs, useThreadPrefs } from "./src/use-prefs";
 import { CalmHeaderControl } from "./src/header-control";
 import { CalmSettings } from "./src/settings-section";
 import { ALERT_HEIGHT, HelperAlertRow } from "./src/crew-alert";
+import { IDLE_TURN_MS, everyVisible, idleTurns, nextIdleTurn } from "./src/idle-turns";
 import "./src/settings-section.css";
 import type { Hit, ThemeMode } from "./src/kit/types";
 
 const EASE_MS = 180;      // the strip opens and closes this fast, so the prompt box eases
+const FADE_MS = 400;      // with scenes shown always, a new scene fades in this fast
+const FADE_OUT_MS = 200;  // and an idle strip's old scene fades out this fast first
 const TAP_TIP_MS = 4000;              // how long a tapped tooltip stays on a touch screen
 const WATCH_RENEW_MS = 5 * 60_000;    // the server stops counting a thread's steps 12 minutes after the last renewal
 /** A "working" strip whose composer says nothing is running for this long has missed its run-ended event. */
@@ -100,7 +103,7 @@ function tipLines(hit: Hit, state: ThreadState, now: number): [string, string] {
     return [title.length > 40 ? `${title.slice(0, 39)}…` : title, `Child thread · ${word}`];
   }
   const first = mood.kind === "working" ? (mood.turnStartedAt ? `Working ${duration(now - mood.turnStartedAt)}` : "Working")
-    : label(mood);
+    : label(mood) || "Agent idle";
   const parts: string[] = [];
   if (mood.kind === "working" || mood.kind === "waiting") parts.push(plural(steps, "step"));
   if (crew.length > 0) parts.push(plural(crew.length, "child thread"));
@@ -203,22 +206,57 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
       rpc.call("failure_dismiss", { threadId: m.id }).catch(() => {});
     }
   };
-  const mood: Mood = crewOnly ? { kind: "working", turnStartedAt: null, resetsAt: null, since: 0 } : own;
+  // Shown always: between runs the scene plays on as if working, with the
+  // light following the local clock alone (no run, so no run-time dusk).
+  const always = prefs.show === "always";
+  const resting = always && own.kind === "idle" && !crewOnly;
+  const mood: Mood = crewOnly ? { kind: "working", turnStartedAt: null, resetsAt: null, since: 0 }
+    : resting ? { ...own, kind: "working", turnStartedAt: null } : own;
   const view = { ...state, crew, mood: own };
 
   const theme: ThemeMode = useThemeMode();
   const reduced = useReducedMotion(features.still);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const visible = mood.kind !== "idle" && !threadPrefs.off;
+  const skyRef = useRef<HTMLDivElement>(null);
+  const clipRef = useRef<HTMLDivElement>(null);
+  const visible = (mood.kind !== "idle" || always) && !threadPrefs.off;
   // Mounted while visible or closing; open drives the height ease.
   const [mounted, setMounted] = useState(visible);
   // With "a new one each time", the run number picks the scene. The strip
   // keeps the scene it opened with until it has fully closed.
   const lock = useRef<SceneLock | null>(null);
   const choice = threadPrefs.scene ?? prefs.scene;
-  lock.current = lockScene(lock.current, sceneFor(threadId, choice, own.run ?? 0, prefs.excluded), choice, mounted, own);
+  // Shown always with "a new one each time", an idle strip moves to the next
+  // scene from the mix every few minutes of the page being in view. Never
+  // during a run, and never for a fixed scene, a thread's own scene, or a pin.
+  const rotating = resting && visible && choice === "each-run";
+  const [, setTurned] = useState(0);
+  const motionRef = useRef({ rotating, reduced: false });
+  motionRef.current.rotating = rotating;
+  useEffect(() => {
+    if (!rotating) return;
+    let live = true;
+    const turn = () => { nextIdleTurn(threadId); setTurned((n) => n + 1); };
+    const stop = everyVisible(IDLE_TURN_MS, () => {
+      const layers = [skyRef.current, clipRef.current].filter((el): el is HTMLDivElement => !!el?.animate);
+      if (motionRef.current.reduced || layers.length === 0) { turn(); return; }
+      // The old scene fades out, then the new one fades in (below).
+      const outs = layers.map((el) => el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: FADE_OUT_MS, easing: "ease-in", fill: "forwards" }));
+      outs[0].finished.then(() => {
+        if (live && motionRef.current.rotating) turn();
+        else for (const a of outs) a.cancel();
+      }, () => {});
+    });
+    return () => { live = false; stop(); };
+  }, [rotating, threadId]);
+  // Each move takes the bag's next place. Runs count from 1, so a thread that
+  // has never run starts on the first run's scene.
+  const turns = idleTurns(threadId);
+  const place = Math.max(1, own.run ?? 0) + turns;
+  lock.current = lockScene(lock.current, sceneFor(threadId, choice, place, prefs.excluded), `${choice}:${turns}`, mounted, own);
   const kind = lock.current.scene;
+  motionRef.current.reduced = reduced;
   const dusk = prefs.evening;
   const scene = useMemo(() => kind.create({
     surprises: clockFor(surpriseClocks, threadId, () => new SurpriseClock()),
@@ -239,6 +277,18 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
     const t = setTimeout(() => setMounted(false), EASE_MS);
     return () => clearTimeout(t);
   }, [visible, reduced]);
+
+  // Shown always, the strip stays open as the scene changes; the new one fades in.
+  const shownKind = useRef(kind);
+  useLayoutEffect(() => {
+    if (shownKind.current === kind) return;
+    shownKind.current = kind;
+    const layers = [skyRef.current, clipRef.current];
+    for (const el of layers) el?.getAnimations?.().forEach((a) => a.cancel());   // an idle fade-out
+    if (!always || !open || reduced) return;
+    for (const el of layers) el?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS, easing: "ease-out" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind]);
 
   // bb spaces the rows above the prompt box with a gap. Read it so a closed
   // strip can cancel it and leave no jump when it unmounts.
@@ -307,7 +357,6 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
   // Frames come from the shared clock. The canvas is drawn at one canvas pixel
   // per CSS pixel and scaled up crisply by the browser; text and the sky are
   // page layers, so they stay sharp and the sky can fade at its edges.
-  const skyRef = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
   const clock = useRef<{ wake(): void; stop(): void } | null>(null);
   useEffect(() => {
@@ -375,7 +424,7 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
       ) : (
         <>
         <div ref={skyRef} className="calm-sky" aria-hidden="true" />
-        <div className="calm-clip">
+        <div ref={clipRef} className="calm-clip">
         <canvas
           ref={canvasRef}
           aria-hidden="true"
@@ -415,7 +464,7 @@ export default definePluginApp((app) => {
   app.slots.settingsSection({
     id: "calm",
     title: "Scene",
-    description: "What the strip above the prompt box shows while an agent works.",
+    description: "What the strip above the prompt box shows, and when.",
     component: CalmSettings,
   });
 });

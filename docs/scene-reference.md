@@ -11,7 +11,7 @@ Sixteen scenes, each starting mid-action, because most runs are short.
 | Waiting on you | Everything stops and the dog sits facing you, an amber tag by it. | The anchor drops and the lantern glows amber. | The stars hold still; the owl faces you, an amber star beside it. |
 | Rate-limited | The flock is penned and the gate shuts. | Anchored. | Lavender clouds roll in. |
 | Error | A rain cloud until the next run. | A rain cloud. | A rain cloud over the owl. |
-| Done | The strip closes right away. | Same. | Same. |
+| Done | The strip closes right away. With **Show scenes** set to **Always**, it stays and plays on. | Same. | Same. |
 | Your crew | Each active child thread is a sheep with a colored ear tag. | A small boat in the fleet. | A bright star in its color. |
 | A child finishes | It walks into the pen and fades. | It sails back to harbor. | It fades out. |
 | Tap | A sheep says "♪ baa" and hops. | A boat rings a small bell. | A star twinkles. |
@@ -98,9 +98,10 @@ Screen readers hear each change of state ("Calm: Waiting on you") once.
 **Rare surprises** come about once in a long session of work in a thread,
 across runs and scene changes, never while waiting on you or after an error.
 
-**Little gags.** About once every 3 to 5 minutes of work, the scene plays a
+**Little gags.** About once every 3 to 5 minutes while the scene plays, the scene plays a
 short silly moment (two to four seconds) from its three, never the same one
-twice in a row. They play only while the agent works, never while it waits
+twice in a row. They play only while the scene plays (during work, or between runs with
+**Show scenes** set to **Always**), never while it waits
 on you, fails, or rests, never with still pictures or reduced motion, and
 never over the amber light or a helper's marker. They are silent; a tiny ♪
 label appears where it lands the joke. Switch them off under **Little gags**.
