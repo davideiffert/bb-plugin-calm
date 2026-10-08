@@ -10,7 +10,7 @@ Sheep hop fences. A cat knocks a flowerpot off a rooftop. A lighthouse keeper lo
 
 [Watch the 17-second film](assets/launch/hero.mp4).
 
-It has a job, too. An amber light means your agent needs you. A little rain cloud means something went wrong. When the work ends, the scene disappears.
+It has a job, too. An amber light means your agent needs you. A little rain cloud means something went wrong. When the work ends, the scene disappears, unless you choose to keep it up all the time.
 
 ## Try it
 
@@ -36,7 +36,7 @@ By default, each run gets a new scene, with no repeats until the mix has gone th
 
 Pasture, Sea, Night sky, Balloon Fiesta, Pond, Train, Garden, Campfire, Underwater, Snowy village, Mountain trail, Kites, Desert roadrunner, City rooftop, Lighthouse, and Space.
 
-Each has three little gags, forty-eight in all. A frog misses its lily pad. A raccoon makes off with the marshmallows. An astronaut chases a wrench in slow motion. They appear about once every 3 to 5 minutes of work, only while the main agent is working. Switch them off whenever you like.
+Each has three little gags, forty-eight in all. A frog misses its lily pad. A raccoon makes off with the marshmallows. An astronaut chases a wrench in slow motion. They appear about once every 3 to 5 minutes while the scene plays, never while the agent waits on you. Switch them off whenever you like.
 
 Tap a creature for a silent reaction. The light follows your local clock, long runs deepen toward dusk, and seasons add a small touch. Rare visitors drop by, too.
 
@@ -49,7 +49,7 @@ Tap a creature for a silent reaction. The light follows your local clock, long r
 | It needs your answer | The scene holds and an amber light glows. |
 | It hits a rate limit | The scene rests and shows the return time, if bb reports it. |
 | Something fails | A little rain cloud appears. |
-| The run finishes | The scene closes. |
+| The run finishes | The scene closes, or stays when **Show scenes** is set to **Always**. |
 
 When your agent hands work to child threads, they join the scene as helpers: sheep, boats, bees, or other small figures. The settings call this **Crew in scenes**. Tap one for details and a silent reaction. When the main agent rests, a small alert appears only for helpers that need you or have failed. Tap a helper in that alert to open its thread.
 
@@ -58,6 +58,8 @@ When your agent hands work to child threads, they join the scene as helpers: she
 Open **Plugins → Installed plugins → Calm**.
 
 ![Calm's scene chooser and feature switches.](assets/launch/settings.png)
+
+Set **Show scenes** to **Always** to keep the scene up between runs, playing just as it does during work. With a new scene each run, it moves to the next scene in the mix every 3 minutes while the agent is idle, never during a run.
 
 Choose **Edit mix**, tap scene cards to include or leave them out, then choose **Done**. Outside mix editing, tap a card to always show that scene. Turn off gags, surprises, tap reactions, helpers, or the time-of-day effects. **Still pictures** keeps the art still while continuing to show your agent's state. Calm also follows your system's reduced-motion setting and bb's light or dark mode.
 

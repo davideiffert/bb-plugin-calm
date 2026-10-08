@@ -14,7 +14,7 @@ import {
   type MoodKind,
 } from "./src/mood";
 import {
-  EVENING_CHOICES, FEATURES, SCENE_CHOICES, SCENE_IDS, cleanPrefs, cleanThreadPrefs, type ThreadPrefs,
+  EVENING_CHOICES, FEATURES, SCENE_CHOICES, SCENE_IDS, SHOW_CHOICES, cleanPrefs, cleanThreadPrefs, type ThreadPrefs,
 } from "./src/settings";
 
 const kindSchema = z.enum(["idle", "working", "waiting", "rate", "error"]);
@@ -30,12 +30,14 @@ const crewSchema = z.array(z.object({ id: z.string(), kind: kindSchema, title: z
 
 const featuresSchema = z.object(Object.fromEntries(FEATURES.map((f) => [f, z.boolean()])) as Record<(typeof FEATURES)[number], z.ZodBoolean>);
 const prefsSchema = z.object({
+  show: z.enum(SHOW_CHOICES),
   scene: z.enum(SCENE_CHOICES),
   evening: z.union([z.literal(EVENING_CHOICES[0]), z.literal(EVENING_CHOICES[1]), z.literal(EVENING_CHOICES[2])]),
   features: featuresSchema,
   excluded: z.array(z.enum(SCENE_IDS)),
 });
 const prefsChangeSchema = z.object({
+  show: z.enum(SHOW_CHOICES).optional(),
   scene: z.enum(SCENE_CHOICES).optional(),
   evening: prefsSchema.shape.evening.optional(),
   features: featuresSchema.partial().optional(),

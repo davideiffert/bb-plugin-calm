@@ -1,5 +1,5 @@
-// Calm's settings section: scene tiles with live previews drawn by the real
-// scene code, and an evening control over a small dusk strip.
+// Calm's settings section: when scenes show, scene tiles with live previews
+// drawn by the real scene code, and an evening control over a small dusk strip.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Mood } from "./mood";
 import { useReducedMotion } from "./motion";
@@ -9,7 +9,8 @@ import { SUN, beginFrame, endFrame, sprite, sunColor } from "./kit/common";
 import { runOnClock } from "./clock";
 import { GlowLayer } from "./glow";
 import type { Scene, SceneInstance, ThemeMode } from "./kit/types";
-import { EVENING_CHOICES, type Feature, type SceneChoice, type SceneId } from "./settings";
+import { IDLE_TURN_MS } from "./idle-turns";
+import { EVENING_CHOICES, SHOW_CHOICES, type Feature, type SceneChoice, type SceneId } from "./settings";
 import { usePrefs } from "./use-prefs";
 
 const STEP_EVERY = 2.4;   // seconds between pretend agent steps in a preview
@@ -206,6 +207,11 @@ function DuskStrip({ minutes, theme }: { minutes: number; theme: ThemeMode }) {
   );
 }
 
+const SHOW_LABELS: Record<(typeof SHOW_CHOICES)[number], [string, string]> = {
+  working: ["While the agent works", "The strip opens when a run starts and closes when it ends."],
+  always: ["Always", `The scene stays up between runs. If the mix is set to a new scene each run, it moves to the next scene every ${IDLE_TURN_MS / 60_000} minutes while idle.`],
+};
+
 const FEATURE_ROWS: [Feature, string, string][] = [
   ["crew", "Crew in scenes", "Child threads join the scene as small figures in their own colors."],
   ["alert", "Helper alert", "A small scene when a helper waits on you or fails while the main agent rests."],
@@ -256,6 +262,24 @@ export function CalmSettings() {
 
   return (
     <div className="calm-settings" ref={mutedRef} onKeyDown={(e) => { if (editing && e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setEditing(false); editRef.current?.focus(); } }}>
+      <div className="calm-evening">
+        <div className="calm-heading">Show scenes</div>
+        <div className="calm-segments" role="radiogroup" aria-label="Show scenes">
+          {SHOW_CHOICES.map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="radio"
+              aria-checked={prefs.show === c}
+              className="calm-segment"
+              onClick={() => choose({ show: c })}
+            >
+              {SHOW_LABELS[c][0]}
+            </button>
+          ))}
+        </div>
+        <div className="calm-sub">{SHOW_LABELS[prefs.show][1]}</div>
+      </div>
       <div className="calm-tiles" role="group" aria-label="Scene">
         {tile(
           "each-run",
@@ -271,7 +295,7 @@ export function CalmSettings() {
         )}
       </div>
       <div className="calm-heading-row">
-        <span className="calm-sub">{editing ? "Tap a scene to keep it in the mix or leave it out." : "Or always show one scene."}</span>
+        <span className="calm-sub">{editing ? "Tap a scene to keep it in the mix or leave it out." : "Or pick one scene to keep."}</span>
         <span className="calm-mix-actions">
           <span className="calm-sub" aria-live="polite">{mix.length} of {SCENES.length} scenes in the mix</span>
           <button ref={editRef} type="button" className="calm-edit-mix" aria-pressed={editing} onClick={() => setEditing((e) => !e)}>{editing ? "Done" : "Edit mix"}</button>

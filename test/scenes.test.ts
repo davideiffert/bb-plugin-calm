@@ -70,9 +70,17 @@ describe("sceneFor", () => {
 
 describe("cleanPrefs", () => {
   it("keeps known values and defaults the rest", () => {
-    expect(cleanPrefs({ scene: "sea", evening: 20 })).toEqual({ scene: "sea", evening: 20, features: DEFAULT_FEATURES, excluded: [] });
-    expect(cleanPrefs({ scene: "volcano", evening: 90 })).toEqual({ scene: "each-run", evening: 40, features: DEFAULT_FEATURES, excluded: [] });
-    expect(cleanPrefs(undefined)).toEqual({ scene: "each-run", evening: 40, features: DEFAULT_FEATURES, excluded: [] });
+    expect(cleanPrefs({ scene: "sea", evening: 20 })).toEqual({ show: "working", scene: "sea", evening: 20, features: DEFAULT_FEATURES, excluded: [] });
+    expect(cleanPrefs({ scene: "volcano", evening: 90 })).toEqual({ show: "working", scene: "each-run", evening: 40, features: DEFAULT_FEATURES, excluded: [] });
+    expect(cleanPrefs(undefined)).toEqual({ show: "working", scene: "each-run", evening: 40, features: DEFAULT_FEATURES, excluded: [] });
+  });
+
+  it("shows scenes only while the agent works unless set to always", () => {
+    expect(cleanPrefs(undefined).show).toBe("working");
+    expect(cleanPrefs({ scene: "sea" }).show).toBe("working");   // saved before the setting existed
+    expect(cleanPrefs({ show: "always" }).show).toBe("always");
+    expect(cleanPrefs({ show: "sometimes" }).show).toBe("working");
+    expect(cleanPrefs({ show: true }).show).toBe("working");
   });
 
   it("defaults to a new scene each run, with every feature on and Still pictures off", () => {
