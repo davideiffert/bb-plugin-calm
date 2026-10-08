@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 (2026-10-08)
 
 - New **Show scenes** setting. **While the agent works** keeps today's
   behavior and stays the default. **Always** keeps the scene up between runs,
