@@ -15,6 +15,9 @@
   along the tether, the kite and balloon come down, and the anchor drops. The
   next run picks each up where it left off, walking back out to work.
   Scenes tell rest from work through the kit's `resting`.
+- A live gallery of every scene with a switch between a run and a rest, so
+  the change plays out in front of you, and a fast day that runs the clock
+  through dusk, night, and dawn in under a minute: `node tools/gallery/states.mjs`.
 
 ## 1.2.0 (2026-10-08)
 
