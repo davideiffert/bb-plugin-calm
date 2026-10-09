@@ -8,7 +8,8 @@
 // each helper's color. Long run: the moon climbs. Surprise: a comet. Gags: a
 // shooting star overshoots into the pines and the owl stares; the owl's head
 // spins all the way round; the moon blinks behind a cloud. Taps: "♪ hoo", a
-// star twinkles.
+// star twinkles. At rest between runs (scenes shown always): the owl dozes
+// and the stars twinkle slowly.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { AMBER, VIGNETTE_ROWS, rowOf, type AlertSpec } from "../kit/alert";
 import { CLOUD, CLOUD_COLORS, H, SNOW, glow, seeded, skyGlow, skyLayer, snowfall, sprite, type Motion, type Sprite } from "../kit/common";
@@ -215,6 +216,27 @@ export const night = defineScene<State, CrewStar>({
   // The owl is the lead: its cloud.
   errorCloudX: (s) => s.owlPine - 4,
 
+  // Below the hills: the dark of the hillside, and a few stars reflected in a still tarn.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, t = k.t, dark = k.theme === "dark";
+    const rows = Math.round(b.H * b.level);
+    for (let y = 0; y < Math.min(rows, 6); y++) {
+      v.globalAlpha = (dark ? 0.5 : 0.35) * (1 - y / 6);
+      v.fillStyle = P.hill;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    const rnd = seeded(b.W * 3 + 11);
+    v.fillStyle = P.star;
+    for (let i = 0; i < b.W / 9; i++) {
+      const x = rnd() * b.W, y = 4 + rnd() * Math.max(1, b.H - 4), ph = rnd() * 6.3;
+      if (y >= rows) continue;
+      v.globalAlpha = (dark ? 0.6 : 0.5) * b.level * (k.reduced ? 0.8 : 0.5 + 0.5 * Math.sin(t * 0.7 + ph));
+      b.dot(x, y);
+    }
+    v.globalAlpha = 1;
+  },
+
   // Always night here: the faint night glow over the hills, pink-tinted in spring.
   sky(_s, k) {
     if (k.season === "spring" && skyGlow(1, k.view.theme)) skyLayer([330, 70, 78, 0.05]);
@@ -256,7 +278,7 @@ export const night = defineScene<State, CrewStar>({
     v.fillStyle = P.star;
     for (const st of s.stars) {
       const x = starX(s, k, st);
-      v.globalAlpha = dim * (still ? 0.8 : 0.55 + 0.45 * Math.sin(t * st.speed + st.phase));
+      v.globalAlpha = dim * (still ? 0.8 : 0.55 + 0.45 * Math.sin(t * st.speed * (k.resting ? 0.35 : 1) + st.phase));
       dot(x, st.y);
       if (st.big) { v.globalAlpha *= 0.5; dot(x - 1, st.y); dot(x + 1, st.y); dot(x, st.y - 1); dot(x, st.y + 1); }
     }
@@ -427,7 +449,7 @@ function landingPine(s: State): number | null {
 /** What the owl's head is doing now. */
 function owlPose(s: State, k: K): OwlPose {
   const mk = k.mood.kind, t = k.t;
-  if (mk === "rate") return "blink";   // dozing
+  if (mk === "rate" || k.resting) return "blink";   // dozing
   if (mk === "waiting" || mk === "error" || k.reduced) return "front";
   const star = k.gagging("star");
   if (star !== null) {

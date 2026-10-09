@@ -11,7 +11,9 @@
 // dusk. Surprise: a ship passes on the horizon. Gags: a gull steals the
 // keeper's sandwich; a wave splashes the keeper; a broom sweep sends dust into
 // a passing gull. Taps: the keeper waves, "♪ caw", a splash. Seasons: snow on
-// the rocks in winter, a far sail in summer.
+// the rocks in winter, a far sail in summer. At rest between runs (scenes
+// shown always): the keeper sits down on the gallery step and watches the
+// sea, while the lamp keeps turning.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, rowOf, type AlertSpec } from "../kit/alert";
 import { SNOW, glow, seeded, sprite, type Motion, type Sprite } from "../kit/common";
@@ -47,6 +49,8 @@ const KEEPER = {
   sweep2: [".qqq.", "..f..", ".cccc", "b.ccc", "b.j.j"],
   shake: ["qqq.", "cf..", ".ccc", ".ccc", ".j.j"],
   shake2: [".qqq", "..fc", "ccc.", "ccc.", "j.j."],
+  /** Sitting on the gallery step, legs out, watching the sea. */
+  sit: ["qqq.", ".f..", "ccc.", "cjjj"],
 } satisfies Record<string, Sprite>;
 type KeeperPose = keyof typeof KEEPER;
 const SANDWICH = "#d9c28a";
@@ -184,6 +188,26 @@ export const lighthouse = defineScene<State, Gull>({
 
   errorCloudX: (s) => keeperX(s) - 4,
 
+  // Below the waterline: the sea, with ripples, and the rock's foot under the tower.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, t = k.t, dark = k.theme === "dark";
+    const rows = Math.round(b.H * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.16 : 0.12) + (dark ? 0.14 : 0.1) * (y / Math.max(1, b.H));
+      v.fillStyle = P.water!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.35 : 0.5) * b.level;
+    v.fillStyle = P.ripple!;
+    for (let i = 0; i < b.W / 14; i++) v.fillRect(b.px(((i * 41 + t * (2 + (i % 3))) % b.W + b.W) % b.W), b.px(1 + (i * 5) % Math.max(1, rows)), 2 * b.s3, b.s3);
+    v.globalAlpha = (dark ? 0.3 : 0.25) * b.level;
+    v.fillStyle = P.rock!;
+    const foot = Math.min(rows, 3);
+    for (let y = 0; y < foot; y++) v.fillRect(b.px(s.towerX - 2 - y * 2), b.px(y), (TOWER_W + 4 + y * 4) * b.s3, b.s3);
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (mk === "working" || mk === "idle" || mk === "error") s.turn = (s.turn + dt / 6) % 1;
@@ -195,7 +219,7 @@ export const lighthouse = defineScene<State, Gull>({
       c.come = Math.min(1, c.come + dt / 2);
     }
     if (s.ship !== null && ((s.ship += dt / 16) >= 1 || mk !== "working")) s.ship = null;
-    if ((mk === "working" || mk === "idle") && !k.gagId && (s.keeper.left -= dt) <= 0) nextAct(s);
+    if ((mk === "working" || mk === "idle") && !k.resting && !k.gagId && (s.keeper.left -= dt) <= 0) nextAct(s);
   },
 
   settle(s, k) {
@@ -262,7 +286,7 @@ export const lighthouse = defineScene<State, Gull>({
     // The keeper on the gallery, or inside while resting.
     const kx = keeperX(s), ky = GALLERY - 5;
     const pose = keeperPose(s, k);
-    if (pose) k.blit(paint(KEEPER[pose], theme), kx - 1, ky - 1);
+    if (pose) k.blit(paint(KEEPER[pose], theme), kx - 1, ky - 1 + (pose === "sit" ? 1 : 0));
     // Waiting on you: the keeper holds out a lantern, the amber signal.
     if (mk === "waiting") k.signal(kx - 2, GALLERY - 3);
 
@@ -309,6 +333,7 @@ export const lighthouse = defineScene<State, Gull>({
     if (s.crash !== null || s.flash !== null || s.ship !== null) return "fast";
     if (k.crew.some((c) => c.leaving || c.come < 1 || c.kind === "working")) return mk === "idle" && !k.crew.some((c) => c.leaving) ? "still" : "fast";
     if (mk === "rate") return s.fog < 1 ? "fast" : "slow";
+    if (k.resting) return "slow";   // the lamp turns and the waves roll
     // The lamp turns and the waves roll: gentle.
     return mk === "idle" ? "still" : "slow";
   },
@@ -374,6 +399,7 @@ export const lighthouse = defineScene<State, Gull>({
 function keeperPose(s: State, k: K): KeeperPose | null {
   const mk = k.mood.kind, t = k.t;
   if (mk === "rate") return null;
+  if (k.resting) return "sit";
   if (mk === "waiting") return "front";
   if (mk === "error") return "front";
   const swing = !k.reduced && Math.floor(t * 4) % 2 === 0;

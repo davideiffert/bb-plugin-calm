@@ -10,7 +10,8 @@
 // cactus blooms in spring, heat shimmer in summer, a tumbleweed in autumn,
 // snow on the buttes in winter. Gags: a tumbleweed chases the roadrunner; a
 // lizard does push-ups on a rock; the roadrunner skids to a stop at a
-// cactus, nose to spine.
+// cactus, nose to spine. At rest between runs (scenes shown always): it
+// trots to the first saguaro's shade and settles there, as when rate-limited.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, rowOf, type AlertSpec } from "../kit/alert";
 import { SNOW, SUN, seeded, sprite, sunColor, type Motion, type Sprite } from "../kit/common";
@@ -196,12 +197,30 @@ export const desert = defineScene<State, Quail>({
 
   errorCloudX: (s, k) => (k.mood.kind === "rate" ? shade(s) : s.x + 2),
 
+  // Below the road: hard-packed sand, the saguaros' shallow roots, and buried stones.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, dark = k.theme === "dark";
+    const rows = Math.round(Math.min(b.H, 9) * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.45 : 0.35) * (1 - y / 9);
+      v.fillStyle = y < 1 ? P.road! : P.sand!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.4 : 0.35) * b.level;
+    v.fillStyle = P.t!;
+    for (const x of s.saguaros) for (let y = 1; y < Math.min(rows, 4); y++) { b.dot(x + 2 - (y - 1) * 2, y); b.dot(x + 2 + (y - 1) * 2, y); }
+    v.fillStyle = P.R!;
+    for (let x = 9; x < b.W; x += 27) if (rows > 4) { b.dot((x * 7) % b.W, 4 + (x % 4)); b.dot((x * 7) % b.W + 1, 4 + (x % 4)); }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     s.burst = Math.max(0, s.burst - dt);
     if (mk === "working" && (k.gagId === "tumble" || k.gagId === "skid")) {
       // The gag runs the roadrunner.
-    } else if (mk === "working") {
+    } else if (mk === "working" && !k.resting) {
       // Dash, stop and look around, dash again.
       if (s.dash > 0) {
         s.dash -= dt;
@@ -213,8 +232,8 @@ export const desert = defineScene<State, Quail>({
         s.dash = 0.6 + Math.random() * 0.8;
         if (Math.random() < 0.35) s.dir = s.dir > 0 ? -1 : 1;
       }
-    } else if (mk === "waiting") {   // it runs to the nearest saguaro
-      const dx = cactusSpot(s) - s.x;
+    } else if (mk === "waiting" || k.resting) {   // it runs to the nearest saguaro, or trots to the shade
+      const dx = (k.resting ? shade(s) : cactusSpot(s)) - s.x;
       if (Math.abs(dx) > 0.3) { s.dir = dx > 0 ? 1 : -1; s.x += s.dir * Math.min(Math.abs(dx), DASH * dt); }
     }
     for (const d of s.dust) d.k += dt / 0.7;
@@ -239,6 +258,7 @@ export const desert = defineScene<State, Quail>({
     s.coyote = null;
     s.dash = 0;
     if (k.mood.kind === "waiting") s.x = cactusSpot(s);
+    if (k.resting) s.x = shade(s);
     k.crew = k.crew.filter((c) => !c.leaving);
     k.crew.forEach((c, i) => { c.x = k.W * 0.55 + i * 7; });
   },
@@ -317,7 +337,9 @@ export const desert = defineScene<State, Quail>({
     const running = mk === "working" && !k.reduced && (tumble !== null ? tumble > 0.2 && tumble < 0.92 : skid !== null ? skid < 0.45 : s.dash > 0);
     // Waiting: it runs to the saguaro first, then turns to face you.
     const arrived = mk !== "waiting" || k.reduced || Math.abs(cactusSpot(s) - s.x) <= 0.3;
-    const pose = mk === "rate" ? RUNNER.rest : !arrived ? (Math.floor(t * 10) % 2 ? RUNNER.run2 : RUNNER.run1) : mk === "waiting" ? RUNNER.front : running ? (Math.floor(t * 10) % 2 ? RUNNER.run2 : RUNNER.run1) : RUNNER.stand;
+    const shaded = k.resting && (k.reduced || Math.abs(shade(s) - s.x) <= 0.3);
+    const heading = !arrived || (k.resting && !shaded);
+    const pose = mk === "rate" || shaded ? RUNNER.rest : heading ? (Math.floor(t * 10) % 2 ? RUNNER.run2 : RUNNER.run1) : mk === "waiting" ? RUNNER.front : running ? (Math.floor(t * 10) % 2 ? RUNNER.run2 : RUNNER.run1) : RUNNER.stand;
     const x = mk === "rate" ? shade(s) : s.x;
     k.blit(paint(pose, theme, (mk !== "waiting" || !arrived) && s.dir < 0), x - 1, GROUND - 8);
 
@@ -329,6 +351,7 @@ export const desert = defineScene<State, Quail>({
     const mk = k.mood.kind;
     if (s.dust.length || s.coyote !== null) return "fast";
     if (k.crew.some((c) => c.leaving)) return "fast";
+    if (k.resting) return Math.abs(shade(s) - s.x) > 0.3 ? "fast" : k.season === "summer" || k.season === "autumn" ? "slow" : "still";
     if (mk === "working") return "fast";
     return mk === "waiting" || mk === "error" ? "slow" : "still";
   },

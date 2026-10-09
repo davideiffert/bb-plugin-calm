@@ -11,7 +11,9 @@
 // shark passes far behind. Taps: "♪ blub" and bubbles, a fish flips, the
 // clam opens. Seasons: none down here, where the year doesn't reach.
 // Gags: the turtle bumps a big bubble and wobbles; a crab pinches a passing
-// fish's tail; an octopus inks and vanishes.
+// fish's tail; an octopus inks and vanishes. At rest between runs (scenes
+// shown always): the turtle settles on the sand, eyes closed, the bubbles
+// stilled, as when rate-limited.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, rowOf, type AlertSpec } from "../kit/alert";
 import { glow, seeded, skyGlow, skyLayer, sprite, type Motion, type Sprite } from "../kit/common";
@@ -194,20 +196,41 @@ export const underwater = defineScene<State, Fish>({
 
   errorCloudX: (s) => s.x,
 
+  // Below the sand: deeper water and bubbles rising past the text.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, t = k.t, dark = k.theme === "dark";
+    const rows = Math.round(b.H * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.18 : 0.12) + (dark ? 0.14 : 0.1) * (y / Math.max(1, b.H));
+      v.fillStyle = P.surface!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.5 : 0.55) * b.level;
+    v.fillStyle = P.bubble!;
+    for (let i = 0; i < b.W / 20; i++) {
+      const x = (i * 41 + 7) % b.W + Math.sin(t * 2 + i) * 0.8;
+      const y = rows - ((t * (2 + (i % 3)) + i * 9) % (rows + 2));
+      if (y >= 0 && y < rows) b.dot(x, y);
+    }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (s.clam !== null && (s.clam += dt) > 1.6) s.clam = null;
     const restY = FLOOR - 5;
-    if (mk === "rate") s.y = Math.min(restY, s.y + dt * 2);
+    const settled = mk === "rate" || k.resting;
+    if (settled) s.y = Math.min(restY, s.y + dt * 2);
     else s.y += (5 - s.y) * Math.min(1, dt * 0.8);
-    if (mk === "working") {
+    if (mk === "working" && !k.resting) {
       s.x += s.dir * SWIM * dt;
       if (s.x > k.W - TURTLE_W - 4) s.dir = -1;
       if (s.x < 4) s.dir = 1;
     }
     // Bubbles rise from the seaweed and the turtle; none while it rests.
     s.sinceBubble += dt;
-    if (mk !== "rate" && s.sinceBubble > 1.1) {
+    if (!settled && s.sinceBubble > 1.1) {
       s.sinceBubble = 0;
       s.bubbles.push({ x: s.weeds[Math.floor(Math.random() * s.weeds.length)] ?? 10, y: FLOOR - 4, k: 0 });
     }
@@ -228,7 +251,7 @@ export const underwater = defineScene<State, Fish>({
     s.clam = null;
     s.bubbles = [];
     s.shark = null;
-    s.y = k.mood.kind === "rate" ? FLOOR - 5 : 5;
+    s.y = k.mood.kind === "rate" || k.resting ? FLOOR - 5 : 5;
     k.crew = k.crew.filter((c) => !c.leaving);
     for (const c of k.crew) c.x = Math.max(6, Math.min(c.x, k.W - FISH_W - 6));
   },
@@ -311,10 +334,10 @@ export const underwater = defineScene<State, Fish>({
     }
 
     // The turtle.
-    const pose = mk === "rate" ? TURTLE.rest : mk === "waiting" ? TURTLE.front : !k.reduced && mk === "working" && Math.floor(t / 0.6) % 2 ? TURTLE.swim2 : TURTLE.swim1;
+    const pose = mk === "rate" || k.resting ? TURTLE.rest : mk === "waiting" ? TURTLE.front : !k.reduced && mk === "working" && Math.floor(t / 0.6) % 2 ? TURTLE.swim2 : TURTLE.swim1;
     const bubble = k.gagging("bubble");
     const wobble = bubble !== null && bubble > 0.4 && bubble < 0.75 ? Math.sin(t * 25) * 0.8 : 0;
-    const bob = k.reduced || mk !== "working" ? 0 : Math.sin(t * 1.2) * 0.6;
+    const bob = k.reduced || mk !== "working" || k.resting ? 0 : Math.sin(t * 1.2) * 0.6;
     k.blit(paint(pose, theme, mk !== "waiting" && s.dir < 0), s.x - 1 - (wobble ? s.dir : 0), s.y - 1 + bob + wobble);
 
     // Waiting on you: a jellyfish by the turtle's head, the signal at its heart.
@@ -333,8 +356,8 @@ export const underwater = defineScene<State, Fish>({
     const mk = k.mood.kind;
     if (s.clam !== null || s.shark !== null) return "fast";
     if (k.crew.some((c) => c.leaving || c.kind === "working" || c.x < 6 || c.x > k.W - FISH_W - 6)) return mk === "idle" && !k.crew.some((c) => c.leaving) ? "still" : "fast";
+    if (mk === "rate" || k.resting) return s.y < FLOOR - 5 || s.bubbles.length ? "fast" : "slow";
     if (mk === "working") return "fast";
-    if (mk === "rate") return s.y < FLOOR - 5 || s.bubbles.length ? "fast" : "slow";
     return mk === "idle" ? "still" : "slow";   // seaweed sways, the jellyfish pulses
   },
 

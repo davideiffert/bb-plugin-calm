@@ -69,6 +69,8 @@ export interface SceneInstance {
   motion(): Motion;
   /** Where the main character (dog, boat, moon) is, in CSS px from the left. */
   focusX(): number;
+  /** Paint the prompt box's layer behind its text (experimental): what lies below the scene's ground line. */
+  drawBelow(ctx: CanvasRenderingContext2D, cssWidth: number, cssHeight: number, level: number): void;
 }
 
 export interface Scene {

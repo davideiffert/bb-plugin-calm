@@ -15,6 +15,11 @@ export interface Mood {
   run?: number;
   /** While idle: when the run that just ended started, in case it resumes. */
   lastStart?: number | null;
+  /**
+   * Scenes shown always, between runs: the strip hands the scene a "working"
+   * mood so it plays on, with this set so a scene can show itself at rest.
+   */
+  resting?: boolean;
 }
 
 export type MoodEvent =

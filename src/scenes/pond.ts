@@ -12,7 +12,9 @@
 // Seasons: ice at the edges, pink lilies in spring, a blue dragonfly in
 // summer, floating leaves in autumn. Gags: the frog misses a lily pad and
 // plops in; the duck dips bottom-up and stays that way a beat too long; a
-// dragonfly lands on the duck's head and the duck goes cross-eyed.
+// dragonfly lands on the duck's head and the duck goes cross-eyed. At rest
+// between runs (scenes shown always): the duck sleeps where it is, head
+// under a wing, while the ripples drift on.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, rowOf, type AlertSpec } from "../kit/alert";
 import { SNOW, seeded, sprite, type Motion, type Sprite } from "../kit/common";
@@ -228,9 +230,31 @@ export const pond = defineScene<State, Duckling>({
 
   errorCloudX: (s) => s.x - 1,
 
+  // Below the surface: still water, drifting ripples, and the reeds' reflections.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, t = k.t, dark = k.theme === "dark";
+    const rows = Math.round(b.H * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.15 : 0.1) + (dark ? 0.12 : 0.08) * (y / Math.max(1, b.H));
+      v.fillStyle = P.water!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.3 : 0.45) * b.level;
+    v.fillStyle = P.ripple!;
+    for (let i = 0; i < b.W / 16; i++) {
+      const x = ((i * 47 + (i % 2 ? 1 : -1) * t * 1.2) % b.W + b.W) % b.W;
+      v.fillRect(b.px(x), b.px(1 + (i * 5) % Math.max(1, rows)), 2 * b.s3, b.s3);
+    }
+    v.globalAlpha = (dark ? 0.25 : 0.3) * b.level;
+    v.fillStyle = P.r!;
+    for (const x of s.reeds) for (let y = 0; y < Math.min(rows, 4); y++) b.dot(x + (y % 2), y);
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
-    if (mk === "working" && k.gagId !== "dip" && k.gagId !== "cross") {
+    if (mk === "working" && !k.resting && k.gagId !== "dip" && k.gagId !== "cross") {
       s.x += s.dir * PADDLE * dt;
       if (s.x > k.W - DUCK_W - 12) s.dir = -1;
       if (s.x < 12) s.dir = 1;
@@ -343,10 +367,10 @@ export const pond = defineScene<State, Duckling>({
     }
 
     // The duck.
-    const bob = k.reduced || mk !== "working" ? 0 : Math.sin(t * 2.4) * 0.5;
+    const bob = k.reduced || mk !== "working" || k.resting ? 0 : Math.sin(t * 2.4) * 0.5;
     const dip = k.gagging("dip"), cross = k.gagging("cross");
     const dipped = dip !== null && dip > 0.12 && dip < 0.88;
-    const pose = mk === "rate" ? DUCK.sleep : mk === "waiting" ? DUCK.front
+    const pose = mk === "rate" || k.resting ? DUCK.sleep : mk === "waiting" ? DUCK.front
       : dipped ? (Math.floor(t * 6) % 2 ? DUCK.dip : DUCK.dip2)
       : cross !== null && cross > 0.35 && cross < 0.85 ? DUCK.cross : cross !== null && cross > 0.25 ? DUCK.front : DUCK.swim;
     const facing = pose === DUCK.swim || pose === DUCK.dip || pose === DUCK.dip2;
@@ -376,6 +400,7 @@ export const pond = defineScene<State, Duckling>({
     const mk = k.mood.kind;
     if (s.frog.k !== null || s.rings.length || s.heron) return "fast";
     if (k.crew.some((c) => c.leaving || (c.kind === "working" && mk === "working"))) return "fast";
+    if (k.resting) return "slow";   // asleep: the ripples drift
     if (mk === "working") return "fast";
     // Ripples drift, the dragonfly hovers, the rain falls: gentle.
     return mk === "idle" ? "still" : "slow";

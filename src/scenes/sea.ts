@@ -2,7 +2,8 @@
 // Kun Chen's firstmate; the boat, water, and moments here are drawn fresh.
 // Gags: a gull lands on the mast and the boat tips; a fish leaps into the
 // boat and flops back out; the sail luffs and the boat drifts backward a
-// moment, then catches the wind.
+// moment, then catches the wind. Shown always and resting between runs, the
+// boat lies at anchor with its sail furled, bobbing gently.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, AMBER, rowOf, type AlertSpec } from "../kit/alert";
 import { H, SUN, floatNote, seeded, snowfall, sprite, sunColor, type Motion, type Sprite } from "../kit/common";
@@ -39,6 +40,20 @@ const BOAT_LUFF: Sprite = [
   "...s.s.mSSS....",
   "..ss.s.mS.SS...",
   ".......m.......",
+  "hhhhhhhhhhhhhhh",
+  ".rrrrrrrrrrrrr.",
+  "..HHHHHHHHHHH..",
+];
+/** Moored: the sail furled along the boom. */
+const BOAT_MOORED: Sprite = [
+  ".......m.......",
+  ".......m.......",
+  ".......m.......",
+  ".......m.......",
+  ".......m.......",
+  ".......m.......",
+  "....sSSmSSs....",
+  "...mmmmmmmmm...",
   "hhhhhhhhhhhhhhh",
   ".rrrrrrrrrrrrr.",
   "..HHHHHHHHHHH..",
@@ -87,6 +102,8 @@ interface State {
   dir: 1 | -1;
   fish: Fish | null;
   anchor: number;       // 0 = stowed, 1 = on the bottom
+  /** The sail is furled: at rest, and until the anchor is back up. */
+  furled: boolean;
   stars: [number, number][];
   whale: { x: number; k: number } | null;
 }
@@ -175,7 +192,7 @@ const alert: AlertSpec = {
 export const sea = defineScene<State, Skiff>({
   id: "sea",
   name: "Sea",
-  state: () => ({ x: 0, dir: 1, fish: null, anchor: 0, stars: [], whale: null }),
+  state: () => ({ x: 0, dir: 1, fish: null, anchor: 0, furled: false, stars: [], whale: null }),
 
   layout(s, k, prevW) {
     const W = k.W;
@@ -184,14 +201,16 @@ export const sea = defineScene<State, Skiff>({
     const rnd = seeded(W);
     s.stars = Array.from({ length: Math.floor(W / 30) }, () => [Math.floor(rnd() * W), Math.floor(rnd() * 6)]);
   },
-  mood(s, k) { if (k.mood.kind === "working") s.anchor = 0; },
+  // Back to work from waiting or a rate limit: the anchor is simply up. From a rest it is hauled up in view.
+  mood(s, k, was) { if (k.mood.kind === "working" && !k.resting && was !== "working") { s.anchor = 0; s.furled = false; } },
   /** A new run starts under way: mid-water, sailing, a fish already leaping. */
   start(s, k) {
-    const running = k.mood.kind === "working";
+    const running = k.mood.kind === "working" && !k.resting;
     const room = k.W - BOAT_W - 12;
     s.x = 6 + room * (0.2 + Math.random() * 0.5);
     s.dir = Math.random() < 0.5 ? 1 : -1;
     s.anchor = 0;
+    s.furled = false;
     if (running) leap(s, k);   // opening a thread that isn't running shows no leap
   },
 
@@ -236,6 +255,34 @@ export const sea = defineScene<State, Skiff>({
 
   errorCloudX: (s) => s.x + 1,
 
+  // Below the waterline: deeper water, ripples, and a couple of fish behind the text.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, t = k.t, dark = k.theme === "dark";
+    const rows = Math.round(b.H * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.16 : 0.12) + (dark ? 0.14 : 0.1) * (y / Math.max(1, b.H));
+      v.fillStyle = P.water!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.35 : 0.5) * b.level;
+    v.fillStyle = P.ripple!;
+    for (let i = 0; i < b.W / 12; i++) {
+      const x = ((i * 53 + (i % 2 ? 1 : -1) * t * (1.5 + (i % 3))) % b.W + b.W) % b.W;
+      const y = 1 + (i * 7) % Math.max(1, rows);
+      v.fillRect(b.px(x), b.px(y), 3 * b.s3, b.s3);
+    }
+    // Two fish, each on its own slow beat, turning at the edges.
+    v.globalAlpha = (dark ? 0.55 : 0.6) * b.level;
+    for (const [i, sp] of [[0, 5], [1, 3.5]] as const) {
+      const span = b.W + 16, p = ((t * sp + i * span * 0.5) % (2 * span));
+      const dir = p < span ? 1 : -1, x = (p < span ? p : 2 * span - p) - 8;
+      const y = Math.min(rows - 3, 2 + i * 4 + Math.sin(t * 0.8 + i) * 1.2);
+      if (y >= 0) b.blit(sprite(FISH, P, dir < 0), x, y);
+    }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     for (const b of k.crew) {
@@ -259,9 +306,11 @@ export const sea = defineScene<State, Skiff>({
       s.fish.k += dt / FISH_SECONDS;
       if (s.fish.k >= 1) s.fish = null;
     }
-    const anchored = mk === "waiting" || mk === "rate";
-    s.anchor = anchored ? Math.min(1, s.anchor + dt / ANCHOR_SECONDS) : 0;
-    if (mk !== "working") return;
+    const anchored = mk === "waiting" || mk === "rate" || k.resting;
+    s.anchor = anchored ? Math.min(1, s.anchor + dt / ANCHOR_SECONDS) : Math.max(0, s.anchor - dt / ANCHOR_SECONDS);
+    if (k.resting) s.furled = true;
+    else if (s.anchor === 0) s.furled = false;
+    if (mk !== "working" || k.resting || s.anchor > 0) return;   // under way only once the anchor is up
     // Luffing: the boat slips backward a moment, then lurches ahead on the wind.
     const luff = k.gagging("luff");
     s.x += s.dir * DRIFT * dt * (luff === null ? 1 : luff < 0.55 ? -0.8 : 2.2);
@@ -275,7 +324,8 @@ export const sea = defineScene<State, Skiff>({
     k.crew = k.crew.filter((b) => !b.leaving);
     for (const b of k.crew) b.x = Math.max(4, Math.min(b.x, k.W - SKIFF_W - 4));
     s.fish = null;
-    s.anchor = k.mood.kind === "waiting" || k.mood.kind === "rate" ? 1 : 0;
+    s.anchor = k.mood.kind === "waiting" || k.mood.kind === "rate" || k.resting ? 1 : 0;
+    s.furled = k.resting;
   },
 
   draw(s, k) {
@@ -343,8 +393,8 @@ export const sea = defineScene<State, Skiff>({
       v.fillRect(px(x), px(Math.round(row)), 3 * s3, s3);
     }
 
-    // The anchor line and anchor, under the bow.
-    const bob = k.reduced || mk === "waiting" || mk === "rate" ? 0 : Math.sin(t * 2.2) * 0.8;
+    // The anchor line and anchor, under the bow. A moored boat rides the swell slowly.
+    const bob = k.reduced || mk === "waiting" || mk === "rate" ? 0 : k.resting ? Math.sin(t * 1.1) * 0.5 : Math.sin(t * 2.2) * 0.8;
     const boatY = WATER - 9 + bob;
     const bowX = s.x + (s.dir > 0 ? BOAT_W - 3 : 2);
     if (s.anchor > 0) {
@@ -358,7 +408,8 @@ export const sea = defineScene<State, Skiff>({
     const gull = k.gagging("gull"), luff = k.gagging("luff");
     const perched = gull !== null && gull > 0.35 && gull < 0.78;
     const tip = perched ? (s.dir > 0 ? 1 : -1) * 0.16 * (1 - Math.min(1, (gull - 0.35) / 0.43) * 0.5) * (0.85 + 0.15 * Math.sin(t * 9)) : 0;
-    const boatArt = luff !== null && luff < 0.55 && Math.floor(t * 8) % 2 ? sprite(BOAT_LUFF, P, s.dir < 0, "Ss") : pal(s.dir < 0);
+    const boatArt = s.furled ? sprite(BOAT_MOORED, P, s.dir < 0, "Ss")
+      : luff !== null && luff < 0.55 && Math.floor(t * 8) % 2 ? sprite(BOAT_LUFF, P, s.dir < 0, "Ss") : pal(s.dir < 0);
     if (tip) {
       const cx = k.px(s.x + BOAT_W / 2), cy = k.px(boatY + 9);
       v.save(); v.translate(cx, cy); v.rotate(tip); v.translate(-cx, -cy);
@@ -402,7 +453,9 @@ export const sea = defineScene<State, Skiff>({
 
   motion(s, k): Motion {
     const mk = k.mood.kind;
-    if (mk === "working" || s.fish || s.whale) return "fast";
+    if (s.fish || s.whale) return "fast";
+    if (k.resting) return s.anchor < 1 || k.crew.some((b) => b.leaving || b.kind === "working") ? "fast" : "slow";
+    if (mk === "working") return "fast";
     if ((mk === "waiting" || mk === "rate") && s.anchor < 1) return "fast";
     if (k.crew.some((b) => b.leaving || b.kind === "working" || b.x < 4 || b.x > k.W - SKIFF_W - 4)) return "fast";
     // The water keeps rolling, the lantern blinks, the rain falls: gentle.

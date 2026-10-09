@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+- With **Always**, every scene now looks different between runs. Steps, gags,
+  and rare surprises stop, and each scene settles into a rest: the boat lies
+  at anchor with its sail furled; the flock grazes and the dog lies down; the
+  owl dozes; the balloon settles to the ground; the duck sleeps; the train
+  stops with its headlamp off; the gardener naps on the bench; the fire dies
+  to embers; the turtle settles on the sand; the village goes indoors; the
+  hiker sits on a boulder; the kite comes down; the roadrunner takes the
+  shade; the cat curls up by the vent; the keeper sits on the gallery step;
+  the astronaut goes inside. Nobody jumps: the gardener, camper, child, cat,
+  hiker, and roadrunner walk to their resting places, the astronaut reels in
+  along the tether, the kite and balloon come down, and the anchor drops. The
+  next run picks each up where it left off, walking back out to work.
+  Scenes tell rest from work through the kit's `resting`.
+- Experimental: **Join the prompt box**, off by default in Features. The
+  strip moves to a slot right above the prompt box, below bb's cards such as
+  the commit summary, and sits flush on it with the box's top corners
+  squared, so the two read as one picture. While the strip shows, what lies
+  below the scene carries on faintly behind the text you type: water with fish, bubbles, or ripples under the Sea,
+  Pond, Underwater, and Lighthouse; stars under the Night sky and Space; and
+  under the land scenes the ground itself, with roots, stones, a burrow, the
+  railway's ballast, the building's lower floors, the fire's warmth. It rises in
+  as the strip opens and drains as it closes. It depends on bb's prompt box
+  markup and does nothing when that isn't recognized. Inspired by Gone
+  Fishing's flooded chat input.
+- A live gallery of every scene with a switch between a run and a rest, so
+  the change plays out in front of you, and a fast day that runs the clock
+  through dusk, night, and dawn in under a minute: `node tools/gallery/states.mjs`.
+
 ## 1.2.0 (2026-10-08)
 
 - New **Show scenes** setting. **While the agent works** keeps today's

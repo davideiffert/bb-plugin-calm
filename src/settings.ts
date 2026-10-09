@@ -8,7 +8,7 @@ export const SCENE_CHOICES = [...SCENE_IDS, "each-thread", "each-run"] as const;
 export const EVENING_CHOICES = [20, 40, 60] as const;
 /** When the strip shows a scene: only while the agent works, or all the time. */
 export const SHOW_CHOICES = ["working", "always"] as const;
-export const FEATURES = ["crew", "alert", "surprises", "gags", "taps", "ambient", "header", "still"] as const;
+export const FEATURES = ["crew", "alert", "surprises", "gags", "taps", "ambient", "header", "still", "spill"] as const;
 
 export type SceneId = (typeof SCENE_IDS)[number];
 export type SceneChoice = (typeof SCENE_CHOICES)[number];
@@ -27,7 +27,7 @@ export interface Prefs {
   excluded: SceneId[];
 }
 
-export const DEFAULT_FEATURES: Features = { crew: true, alert: true, surprises: true, gags: true, taps: true, ambient: true, header: true, still: false };
+export const DEFAULT_FEATURES: Features = { crew: true, alert: true, surprises: true, gags: true, taps: true, ambient: true, header: true, still: false, spill: false };
 export const DEFAULT_PREFS: Prefs = { show: "working", scene: "each-run", evening: 40, features: DEFAULT_FEATURES, excluded: [] };
 
 /** Read stored or incoming prefs, keeping only known values. */

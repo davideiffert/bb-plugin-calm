@@ -2,6 +2,8 @@
 //
 // Gags: a sheep gets stuck on the stile and the dog nudges it over; a sheep
 // sneezes and topples, then gets back up; the dog chases its own tail.
+// At rest between runs (scenes shown always): the flock stands and grazes
+// where it is, and the dog lies down.
 //
 // The simulation runs in art pixels and seconds. Sprites are drawn at a
 // whole-number scale so they stay crisp; only their positions move smoothly.
@@ -334,9 +336,29 @@ export const pasture = defineScene<State, Sheep>({
   // The dog is the lead: its cloud.
   errorCloudX: (s) => s.dog.x + 1,
 
+  // Below the meadow: the soil under the turf, with roots and a few pebbles.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, dark = k.theme === "dark";
+    const rows = Math.round(Math.min(b.H, 9) * b.level);
+    const soil = dark ? "#5a4636" : "#b8936a";
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.4 : 0.3) * (1 - y / 9);
+      v.fillStyle = soil;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.5 : 0.45) * b.level;
+    v.fillStyle = P.grass!;
+    for (let x = 2; x < b.W; x += 23) { const i = ((x * 37) % (b.W - 6)) + 2; b.dot(i + 1, 0); if (rows > 2) b.dot(i + (x % 2 ? 1 : 2), 1 + (x % 3)); }
+    v.globalAlpha = (dark ? 0.35 : 0.3) * b.level;
+    v.fillStyle = P.f!;
+    for (let x = 9; x < b.W; x += 31) if (rows > 4) { b.dot((x * 7) % b.W, 3 + (x % 4)); }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind, f = s.fenceX;
-    if (mk === "working") {
+    if (mk === "working" && !k.resting) {
       for (const sh of s.sheep)
         if (!sh.hop && Math.abs(sh.x - sh.tx) < 0.5 && Math.random() < 0.8 * dt) sh.tx = wanderTarget(s, sh, k.crew);
     }
@@ -349,7 +371,7 @@ export const pasture = defineScene<State, Sheep>({
       if (s.fox.x > k.W + 4 || mk !== "working") s.fox = null;
     }
     if (mk === "rate") pen(s);
-    const frozen = mk === "waiting" || mk === "error" || mk === "idle";
+    const frozen = mk === "waiting" || mk === "error" || mk === "idle" || k.resting;
     // Heading for the pen takes about five seconds on any strip width.
     const v = mk === "rate" ? Math.max(HURRY, s.penX / 5) : WALK;
     for (const sh of s.sheep) {
@@ -419,7 +441,7 @@ export const pasture = defineScene<State, Sheep>({
     v.drawImage(back, 0, 0, W * s3, H * s3);
     const blit = (c: HTMLCanvasElement, x: number, y: number) => k.blit(c, x, y);
 
-    const moving = !k.view.reducedMotion && mk === "working";
+    const moving = !k.view.reducedMotion && mk === "working" && !k.resting;
     const beat = Math.floor(k.t / 0.27);
     if (s.fox && !k.reduced) {
       const trot = s.fox.pause > 0 && s.fox.pause < 1.2 ? FOX.stand : beat % 2 ? FOX.trot2 : FOX.trot1;
@@ -427,7 +449,7 @@ export const pasture = defineScene<State, Sheep>({
     }
     const d = s.dog;
     const seated = mk === "waiting" && (k.reduced || Math.abs(sitSpot(s) - d.x) <= 0.5);
-    if (mk === "rate") blit(sprite(DOG.lie, theme, false), d.x, GROUND - 4);
+    if (mk === "rate" || k.resting) blit(sprite(DOG.lie, theme, false), d.x, GROUND - 4);
     else if (!seated) {
       const tail = k.gagging("tail");
       const trotting = (moving || mk === "waiting") && !k.view.reducedMotion && (tail !== null ? Math.floor(k.t * 10) % 2 === 1 : beat % 2 === 1);
@@ -504,6 +526,7 @@ export const pasture = defineScene<State, Sheep>({
     const all = [...s.sheep, ...k.crew];
     if (s.fox || all.some((sh) => sh.hop)) return "fast";
     if (k.crew.some((c) => c.leaving || c.alpha < 1 || (c.kind === "working" && Math.abs(c.x - c.tx) >= 0.5))) return "fast";
+    if (k.resting) return k.season !== "spring" ? "slow" : "still";   // lying down: only the season moves
     if (mk === "working") return "fast";   // the flock ambles and the dog keeps moving
     if (mk === "waiting" && Math.abs(sitSpot(s) - s.dog.x) > 0.5) return "fast";
     if (mk === "rate" && !allPenned(s)) return "fast";

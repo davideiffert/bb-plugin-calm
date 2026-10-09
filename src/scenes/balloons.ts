@@ -10,7 +10,9 @@
 // the mesa, birds in spring, a hawk in summer, and the fiesta's crowd of far
 // balloons in autumn. Gags: the burner flares just as a bird flies past, and
 // it zooms off with a smoking tail; the cow balloon gives a tiny "♪ moo"; the
-// balloon bumps a small one and both bounce apart.
+// balloon bumps a small one and both bounce apart. At rest between runs
+// (scenes shown always): it settles to the ground, envelope up, burner off,
+// and lifts off again when the next run starts.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, AMBER, rowOf, type AlertSpec } from "../kit/alert";
 import { SNOW, floatNote, glow, seeded, sprite, type Motion, type Sprite } from "../kit/common";
@@ -77,8 +79,10 @@ interface State {
   /** Extra height from a burner flare, in art px; settles back to 0. */
   lift: number;
   flare: number | null;
-  /** 0 = aloft, 1 = landed. */
+  /** 0 = aloft, 1 = landed, envelope down (rate-limited). */
   land: number;
+  /** 0 = aloft, 1 = settled on the ground, envelope up (resting between runs). */
+  rest: number;
   fars: { x: number; y: number }[];
   mesa: number[];
   cow: number | null;
@@ -93,8 +97,8 @@ const TOP = 1;   // the balloon's top row while aloft
 const LAND_SECONDS = 2.5;
 const landedY = () => GROUND - BALLOON.length + 1;
 const balloonY = (s: State, k: K) => {
-  const aloft = TOP - s.lift + (k.reduced || k.mood.kind === "waiting" ? 0 : Math.sin(k.t * 0.8) * 0.7);
-  return aloft + (landedY() - aloft) * s.land;
+  const aloft = TOP - s.lift + (k.reduced || k.mood.kind === "waiting" || s.rest >= 1 ? 0 : Math.sin(k.t * 0.8) * 0.7);
+  return aloft + (landedY() - aloft) * Math.max(s.land, s.rest);
 };
 const flare = (s: State) => { s.flare = 0; s.lift = Math.min(3, s.lift + 2); };
 
@@ -134,7 +138,7 @@ const alert: AlertSpec = {
 export const balloons = defineScene<State, Small>({
   id: "balloons",
   name: "Balloon Fiesta",
-  state: () => ({ x: 20, dir: 1, lift: 0, flare: null, land: 0, fars: [], mesa: [], cow: null, side: 1 }),
+  state: () => ({ x: 20, dir: 1, lift: 0, flare: null, land: 0, rest: 0, fars: [], mesa: [], cow: null, side: 1 }),
 
   layout(s, k) {
     const W = k.W;
@@ -203,12 +207,30 @@ export const balloons = defineScene<State, Small>({
 
   errorCloudX: (s) => s.x - 1,
 
+  // Below the mesa: layered sandstone fading down, with a few pebbles.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, dark = k.theme === "dark";
+    const rows = Math.round(Math.min(b.H, 10) * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.45 : 0.35) * (1 - y / 10);
+      v.fillStyle = y % 4 === 2 ? P.mesaTop! : P.mesa!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.4 : 0.3) * b.level;
+    v.fillStyle = P.k!;
+    for (let x = 5; x < b.W; x += 29) if (rows > 3) b.dot((x * 11) % b.W, 2 + (x % 5));
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (s.flare !== null && (s.flare += dt) > TIME.reaction) s.flare = null;
     s.lift = Math.max(0, s.lift - dt * 0.9);
     s.land = mk === "rate" ? Math.min(1, s.land + dt / LAND_SECONDS) : 0;
-    if (mk === "working") {
+    // Resting: it settles gently to the ground; a new run lifts it off again.
+    s.rest = k.resting ? Math.min(1, s.rest + dt / LAND_SECONDS) : Math.max(0, s.rest - dt / LAND_SECONDS);
+    if (mk === "working" && !k.resting && s.rest === 0) {
       s.x += s.dir * SPEED.drift * 0.7 * dt;
       if (s.x > k.W - BALLOON_W - 4) s.dir = -1;
       if (s.x < 4) s.dir = 1;
@@ -231,6 +253,7 @@ export const balloons = defineScene<State, Small>({
     s.lift = 0;
     s.cow = null;
     s.land = k.mood.kind === "rate" ? 1 : 0;
+    s.rest = k.resting ? 1 : 0;
     k.crew = k.crew.filter((c) => !c.leaving);
     for (const c of k.crew) c.x = Math.max(2, Math.min(c.x, k.W - SMALL_W - 2));
   },
@@ -337,6 +360,8 @@ export const balloons = defineScene<State, Small>({
     const mk = k.mood.kind;
     if (s.flare !== null || s.lift > 0 || s.cow !== null) return "fast";
     if (k.crew.some((c) => c.leaving || c.kind === "working" || c.x < 2 || c.x > k.W - SMALL_W - 2)) return "fast";
+    if (k.resting) return s.rest < 1 ? "fast" : k.season === "spring" || k.season === "summer" ? "slow" : "still";
+    if (s.rest > 0) return "fast";   // lifting off again
     if (mk === "working") return "fast";
     if (mk === "rate") return s.land < 1 ? "fast" : "still";
     // The pilot light, the rain, a bird or hawk: gentle.

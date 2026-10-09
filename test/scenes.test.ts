@@ -85,9 +85,10 @@ describe("cleanPrefs", () => {
 
   it("defaults to a new scene each run, with every feature on and Still pictures off", () => {
     expect(cleanPrefs(undefined).scene).toBe("each-run");
-    const { still, ...rest } = DEFAULT_FEATURES;
+    const { still, spill, ...rest } = DEFAULT_FEATURES;
     expect(Object.values(rest).every(Boolean)).toBe(true);
     expect(still).toBe(false);   // motion follows the system setting unless you choose stills
+    expect(spill).toBe(false);   // experimental: opt in
   });
 
   it("keeps a feature switched off and ignores unknown ones", () => {
@@ -124,6 +125,25 @@ describe("Sea", () => {
     const x1 = inner.x;
     advance(s, 2);
     expect(inner.x).toBe(x1);
+  });
+  it("lies at anchor with no gags while resting between runs, then sails on", () => {
+    const s = open();
+    advance(s, 2);
+    s.setMood({ ...mood("working"), turnStartedAt: null, resting: true });
+    advance(s, 1);
+    const inner = s as unknown as SeaInner;
+    expect(inner.anchor).toBe(1);
+    const x1 = inner.x;
+    advance(s, 2);
+    expect(inner.x).toBe(x1);
+    expect(s.motion()).toBe("slow");
+    expect(s.gag("gull")).toBe(false);
+    s.step();
+    expect(inner.fish).toBeNull();
+    s.setMood(mood("working"));
+    advance(s, 1);
+    expect(inner.anchor).toBe(0);
+    expect(inner.x).not.toBe(x1);
   });
   it("leaps at most once per debounce window", () => {
     const s = open();
