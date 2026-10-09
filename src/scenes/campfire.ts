@@ -10,11 +10,13 @@
 // wave. Seasons: snow round the camp, flowers in spring, fireflies in summer,
 // falling leaves in autumn. Gags: the marshmallow catches fire and the
 // camper blows on it frantically; a raccoon sneaks off with the marshmallow
-// bag; a log pops and a spark lands on the camper's hat (pat, pat).
+// bag; a log pops and a spark lands on the camper's hat (pat, pat). At rest
+// between runs (scenes shown always): the fire dies to embers and the camper
+// sleeps in the tent, as when rate-limited.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, rowOf, type AlertSpec } from "../kit/alert";
 import { SNOW, glow, seeded, sprite, type Motion, type Sprite } from "../kit/common";
-import { GROUND, TIME } from "../kit/style";
+import { GROUND, SPEED, TIME } from "../kit/style";
 import type { ThemeMode } from "../kit/types";
 
 // -- Art ---------------------------------------------------------------------
@@ -99,12 +101,19 @@ interface State {
   fire: number;
   raccoon: number | null;
   stick: number;
+  /** Where the camper is: on the log, walking, or inside the tent. */
+  cx: number;
+  inside: boolean;
 }
 /** A child thread, shown as a friend round the fire in a colored beanie. */
 interface Friend { seat: number; enter: number }
 type K = Kit<State, Friend>;
 
-const SEATS = [8, 15, 22, -30];   // offsets from the fire: three across from the camper, one behind
+const SEATS = [8, 15, 22, -30];
+/** Time for the tent: rate-limited, or resting between runs. */
+const inTent = (k: K) => k.mood.kind === "rate" || k.resting;
+/** Where the camper stands to go in: in front of the tent door. */
+const tentDoor = (s: State) => s.tentX + 4;   // offsets from the fire: three across from the camper, one behind
 const burst = (s: State, n: number) => {
   for (let i = 0; i < n; i++) s.sparks.push({ x: s.fireX + 2, y: GROUND - 5, vx: (Math.random() - 0.5) * 6, k: 0 });
 };
@@ -152,22 +161,25 @@ const alert: AlertSpec = {
 export const campfire = defineScene<State, Friend>({
   id: "campfire",
   name: "Campfire",
-  state: () => ({ fireX: 60, logX: 40, tentX: 10, sparks: [], fire: 1, raccoon: null, stick: 0 }),
+  state: () => ({ fireX: 60, logX: 40, tentX: 10, sparks: [], fire: 1, raccoon: null, stick: 0, cx: -1, inside: false }),
 
   layout(s, k) {
     const W = k.W;
     s.fireX = Math.floor(W * 0.5);
     s.logX = s.fireX - 17;
     s.tentX = Math.max(4, Math.floor(W * 0.14));
+    s.cx = s.inside ? tentDoor(s) : s.logX;
   },
-  mood(s, k) { if (k.mood.kind === "working") s.fire = Math.max(s.fire, 0.4); },
+  mood(s, k) { if (k.mood.kind === "working" && !k.resting) s.fire = Math.max(s.fire, 0.4); },
   // A new run: the fire already going, a few sparks in the air.
   start(s, k) {
     s.fire = 1;
+    s.cx = s.logX;
+    s.inside = false;
     if (k.mood.kind === "working") burst(s, 4);
   },
 
-  focus: (s, k) => (k.mood.kind === "rate" ? s.tentX + 6 : s.logX + 4),
+  focus: (s) => (s.inside ? s.tentX + 6 : s.cx + 4),
 
   crew: {
     max: (k) => (k.narrow ? 2 : 4),
@@ -193,9 +205,9 @@ export const campfire = defineScene<State, Friend>({
   },
 
   hits(s, k) {
-    const out: HitTarget[] = [k.mood.kind === "rate"
+    const out: HitTarget[] = [s.inside
       ? { target: "lead", box: [s.tentX, GROUND - 7, 13, 7], at: [s.tentX + 6, GROUND - 7] }
-      : { target: "lead", box: [s.logX, GROUND - 11, CAMPER_W, 10], at: [s.logX + 4, GROUND - 11] }];
+      : { target: "lead", box: [s.cx, GROUND - 11, CAMPER_W, 10], at: [s.cx + 4, GROUND - 11] }];
     for (const c of k.crew) {
       if (c.leaving) continue;
       const x = s.fireX + SEATS[c.seat];
@@ -211,13 +223,21 @@ export const campfire = defineScene<State, Friend>({
     if (hit.target === "flock" && !k.reduced && s.fire > 0.3) burst(s, 4);
   },
 
-  errorCloudX: (s) => s.logX - 1,
+  errorCloudX: (s) => (s.inside ? s.tentX : s.cx - 1),
 
   update(s, k, dt) {
     const mk = k.mood.kind;
     // A rest lets the fire die down; work brings it back.
-    s.fire = mk === "rate" ? Math.max(0, s.fire - dt / 4) : Math.min(1, s.fire + dt / 3);
+    s.fire = inTent(k) ? Math.max(0, s.fire - dt / 4) : Math.min(1, s.fire + dt / 3);
     s.stick += dt;
+    // The camper walks to the tent and goes in, or comes out and back to the log.
+    if (mk === "rate") { s.cx = tentDoor(s); s.inside = true; }
+    else {
+      const goal = k.resting ? tentDoor(s) : s.logX;
+      const dx = goal - s.cx;
+      if (Math.abs(dx) > 0.3) s.cx += Math.sign(dx) * Math.min(Math.abs(dx), SPEED.walk * dt);
+      s.inside = k.resting && Math.abs(goal - s.cx) <= 0.3;
+    }
     for (const p of s.sparks) { p.k += dt / 1.4; p.y -= dt * 7; p.x += p.vx * dt; }
     s.sparks = s.sparks.filter((p) => p.k < 1);
     for (const c of k.crew) {
@@ -230,7 +250,9 @@ export const campfire = defineScene<State, Friend>({
   settle(s, k) {
     s.sparks = [];
     s.raccoon = null;
-    s.fire = k.mood.kind === "rate" ? 0 : 1;
+    s.fire = inTent(k) ? 0 : 1;
+    s.inside = inTent(k);
+    s.cx = s.inside ? tentDoor(s) : s.logX;
     k.crew = k.crew.filter((c) => !c.leaving);
     for (const c of k.crew) c.enter = 1;
   },
@@ -238,7 +260,7 @@ export const campfire = defineScene<State, Friend>({
   draw(s, k) {
     const v = k.ctx, theme = k.theme, P = PALETTES[theme];
     const W = k.W, mk = k.mood.kind, t = k.t, e = k.evening(), season = k.season;
-    const resting = mk === "rate";
+    const resting = s.inside;
 
     // The ground: cached.
     const back = k.layer("camp", `${W}:${theme}:${season}:${k.s3}`, v.canvas.width, v.canvas.height, (b) => {
@@ -269,7 +291,13 @@ export const campfire = defineScene<State, Friend>({
 
     // The camper on the log, or asleep in the tent.
     k.blit(paint(LOG, theme), s.logX - 3, GROUND - 2);
-    if (!resting) {
+    const walking = !resting && Math.abs(s.cx - s.logX) > 0.3;
+    if (walking) {
+      // Between the log and the tent: facing the way it goes, with a little step.
+      const toTent = k.resting;
+      const step = k.reduced ? 0 : Math.floor(t * 6) % 2;
+      k.blit(paint(CAMPER.front, theme, toTent), s.cx - 1, GROUND - 11 - step * 0.5);
+    } else if (!resting) {
       const waiting = mk === "waiting";
       k.blit(paint(waiting ? CAMPER.front : CAMPER.sit, theme), s.logX - 1, GROUND - 11);
       if (waiting) {
@@ -316,7 +344,7 @@ export const campfire = defineScene<State, Friend>({
     if (season === "summer" || e > 0.8) k.fireflies(31, 4, 3, 6);
     if (season === "autumn") k.dot(W * 0.75 + (k.reduced ? 0 : Math.sin(t) * 4), k.reduced ? GROUND - 1 : (t * 2.5) % GROUND, "#d9772b");
 
-    k.note("camper", "♪ toasty", s.logX + 9, GROUND - 9);
+    k.note("camper", "♪ toasty", s.cx + 9, GROUND - 9);
     k.note("fire", "♪ crackle", s.fireX + 2, GROUND - 8);
     for (const c of k.crew) k.note(c, "♪ hi", s.fireX + SEATS[c.seat] + 2, GROUND - 8);
   },
@@ -325,7 +353,8 @@ export const campfire = defineScene<State, Friend>({
     const mk = k.mood.kind;
     if (s.sparks.length || s.raccoon !== null) return "fast";
     if (k.crew.some((c) => c.leaving || c.enter < 1)) return "fast";
-    if (mk === "rate") return s.fire > 0 ? "fast" : "slow";   // embers glow
+    if (!s.inside && Math.abs(s.cx - (k.resting ? tentDoor(s) : s.logX)) > 0.3) return "fast";   // walking to or from the tent
+    if (inTent(k)) return s.fire > 0 ? "fast" : "slow";   // embers glow
     // The fire flickers whenever it burns.
     return mk === "idle" ? "still" : "slow";
   },

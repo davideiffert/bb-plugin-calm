@@ -12,7 +12,9 @@
 // Seasons: ice at the edges, pink lilies in spring, a blue dragonfly in
 // summer, floating leaves in autumn. Gags: the frog misses a lily pad and
 // plops in; the duck dips bottom-up and stays that way a beat too long; a
-// dragonfly lands on the duck's head and the duck goes cross-eyed.
+// dragonfly lands on the duck's head and the duck goes cross-eyed. At rest
+// between runs (scenes shown always): the duck sleeps where it is, head
+// under a wing, while the ripples drift on.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, rowOf, type AlertSpec } from "../kit/alert";
 import { SNOW, seeded, sprite, type Motion, type Sprite } from "../kit/common";
@@ -230,7 +232,7 @@ export const pond = defineScene<State, Duckling>({
 
   update(s, k, dt) {
     const mk = k.mood.kind;
-    if (mk === "working" && k.gagId !== "dip" && k.gagId !== "cross") {
+    if (mk === "working" && !k.resting && k.gagId !== "dip" && k.gagId !== "cross") {
       s.x += s.dir * PADDLE * dt;
       if (s.x > k.W - DUCK_W - 12) s.dir = -1;
       if (s.x < 12) s.dir = 1;
@@ -343,10 +345,10 @@ export const pond = defineScene<State, Duckling>({
     }
 
     // The duck.
-    const bob = k.reduced || mk !== "working" ? 0 : Math.sin(t * 2.4) * 0.5;
+    const bob = k.reduced || mk !== "working" || k.resting ? 0 : Math.sin(t * 2.4) * 0.5;
     const dip = k.gagging("dip"), cross = k.gagging("cross");
     const dipped = dip !== null && dip > 0.12 && dip < 0.88;
-    const pose = mk === "rate" ? DUCK.sleep : mk === "waiting" ? DUCK.front
+    const pose = mk === "rate" || k.resting ? DUCK.sleep : mk === "waiting" ? DUCK.front
       : dipped ? (Math.floor(t * 6) % 2 ? DUCK.dip : DUCK.dip2)
       : cross !== null && cross > 0.35 && cross < 0.85 ? DUCK.cross : cross !== null && cross > 0.25 ? DUCK.front : DUCK.swim;
     const facing = pose === DUCK.swim || pose === DUCK.dip || pose === DUCK.dip2;
@@ -376,6 +378,7 @@ export const pond = defineScene<State, Duckling>({
     const mk = k.mood.kind;
     if (s.frog.k !== null || s.rings.length || s.heron) return "fast";
     if (k.crew.some((c) => c.leaving || (c.kind === "working" && mk === "working"))) return "fast";
+    if (k.resting) return "slow";   // asleep: the ripples drift
     if (mk === "working") return "fast";
     // Ripples drift, the dragonfly hovers, the rain falls: gentle.
     return mk === "idle" ? "still" : "slow";

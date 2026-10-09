@@ -8,7 +8,8 @@
 // each helper's color. Long run: the moon climbs. Surprise: a comet. Gags: a
 // shooting star overshoots into the pines and the owl stares; the owl's head
 // spins all the way round; the moon blinks behind a cloud. Taps: "♪ hoo", a
-// star twinkles.
+// star twinkles. At rest between runs (scenes shown always): the owl dozes
+// and the stars twinkle slowly.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { AMBER, VIGNETTE_ROWS, rowOf, type AlertSpec } from "../kit/alert";
 import { CLOUD, CLOUD_COLORS, H, SNOW, glow, seeded, skyGlow, skyLayer, snowfall, sprite, type Motion, type Sprite } from "../kit/common";
@@ -256,7 +257,7 @@ export const night = defineScene<State, CrewStar>({
     v.fillStyle = P.star;
     for (const st of s.stars) {
       const x = starX(s, k, st);
-      v.globalAlpha = dim * (still ? 0.8 : 0.55 + 0.45 * Math.sin(t * st.speed + st.phase));
+      v.globalAlpha = dim * (still ? 0.8 : 0.55 + 0.45 * Math.sin(t * st.speed * (k.resting ? 0.35 : 1) + st.phase));
       dot(x, st.y);
       if (st.big) { v.globalAlpha *= 0.5; dot(x - 1, st.y); dot(x + 1, st.y); dot(x, st.y - 1); dot(x, st.y + 1); }
     }
@@ -427,7 +428,7 @@ function landingPine(s: State): number | null {
 /** What the owl's head is doing now. */
 function owlPose(s: State, k: K): OwlPose {
   const mk = k.mood.kind, t = k.t;
-  if (mk === "rate") return "blink";   // dozing
+  if (mk === "rate" || k.resting) return "blink";   // dozing
   if (mk === "waiting" || mk === "error" || k.reduced) return "front";
   const star = k.gagging("star");
   if (star !== null) {

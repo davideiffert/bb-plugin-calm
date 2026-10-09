@@ -9,7 +9,8 @@
 // "♪ eek". Seasons: deep snow in winter, wildflowers in spring, golden
 // aspens in autumn. Gags: a goat photobombs the hiker's selfie; a marmot
 // steals a granola bar; the hiker's hat blows off and is caught at the last
-// second.
+// second. At rest between runs (scenes shown always): the hiker walks to a
+// boulder by the trail and sits on it, pack off, stick leaning alongside.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, rowOf, type AlertSpec } from "../kit/alert";
 import { SNOW, glow, seeded, sprite, type Motion, type Sprite } from "../kit/common";
@@ -22,7 +23,11 @@ const HIKER = {
   walk1: ["..hh....", ".hhhh...", "..ss....", "..sK....", "bbjjj.t.", "bbjjjs.t", "bbjjj..t", "..pp....", "..p.p...", ".kk.kk.."],
   walk2: ["..hh....", ".hhhh...", "..ss....", "..sK....", "bbjjj..t", "bbjjjs.t", "bbjjj.t.", "..pp....", "..pp....", "..kkk..."],
   front: ["..hhh...", ".hhhhh..", "..sss...", "..KsK...", ".jjjjj..", "sjjjjjs.", ".jjjjj..", "..ppp...", "..p.p...", ".kk.kk.."],
+  /** Sitting on the boulder, legs out front, the stick leaning beside. */
+  sit: ["..hh....", ".hhhh...", "..ss....", "..sK....", ".jjjj.t.", "sjjjjst.", ".jjjpp.t", "...ppp..", "....kk.."],
 } satisfies Record<string, Sprite>;
+const BOULDER: Sprite = ["..oooo..", ".oooooo.", "oooooooo"];
+const PACK: Sprite = ["bb", "bb", "bb"];
 const HIKER_W = 8;
 const GOAT: Sprite = ["g....gg", ".gggggK", ".ggggg.", ".g.g.g."];
 const GOAT_W = 7;
@@ -60,6 +65,8 @@ interface State {
   pines: number[];
   postX: number;
   tentX: number;
+  /** The boulder the hiker rests on between runs. */
+  rockX: number;
   burrow: number;
   /** Seconds into the marmot's pop-up, or null. */
   marmot: number | null;
@@ -79,6 +86,8 @@ const ridge = (s: State, x: number) => {
 
 /** Where the hiker stands while waiting: just left of the trail marker. */
 const postSpot = (s: State) => s.postX - HIKER_W;
+/** Where the hiker sits at rest: on the boulder. */
+const rockSpot = (s: State) => s.rockX;
 
 // -- The helper alert --------------------------------------------------------
 
@@ -107,7 +116,7 @@ const alert: AlertSpec = {
 export const mountain = defineScene<State, Goat>({
   id: "mountain",
   name: "Mountain trail",
-  state: () => ({ x: 30, dir: 1, peaks: [], pines: [], postX: 0, tentX: 0, burrow: 0, marmot: null, eagle: null }),
+  state: () => ({ x: 30, dir: 1, peaks: [], pines: [], postX: 0, tentX: 0, rockX: 0, burrow: 0, marmot: null, eagle: null }),
 
   layout(s, k) {
     const W = k.W;
@@ -117,6 +126,7 @@ export const mountain = defineScene<State, Goat>({
     s.pines = [0.06, 0.22, 0.47, 0.71, 0.93].map((f) => Math.floor(f * W));
     s.postX = Math.floor(W * 0.62);
     s.tentX = Math.floor(W * 0.28);
+    s.rockX = Math.floor(W * 0.42);
     s.burrow = Math.floor(W * 0.8);
     s.x = Math.min(s.x, W - HIKER_W - 6);
   },
@@ -169,12 +179,12 @@ export const mountain = defineScene<State, Goat>({
     const mk = k.mood.kind;
     if (mk === "working" && k.gagId) {
       // A gag holds the hiker still.
-    } else if (mk === "working") {
+    } else if (mk === "working" && !k.resting) {
       s.x += s.dir * SPEED.walk * 0.8 * dt;
       if (s.x > k.W - HIKER_W - 6) s.dir = -1;
       if (s.x < 6) s.dir = 1;
-    } else if (mk === "waiting") {   // the hiker walks over to the trail marker
-      const dx = postSpot(s) - s.x;
+    } else if (mk === "waiting" || k.resting) {   // the hiker walks over to the trail marker, or the boulder
+      const dx = (k.resting ? rockSpot(s) : postSpot(s)) - s.x;
       if (Math.abs(dx) > 0.3) { s.dir = dx > 0 ? 1 : -1; s.x += s.dir * Math.min(Math.abs(dx), SPEED.trot * dt); }
     }
     if (s.marmot !== null && (s.marmot += dt) > MARMOT_SECONDS) s.marmot = null;
@@ -195,6 +205,7 @@ export const mountain = defineScene<State, Goat>({
     s.marmot = null;
     s.eagle = null;
     if (k.mood.kind === "waiting") s.x = postSpot(s);
+    if (k.resting) s.x = rockSpot(s);
     k.crew = k.crew.filter((c) => !c.leaving);
     for (const c of k.crew) c.x = c.tx;
   },
@@ -231,6 +242,8 @@ export const mountain = defineScene<State, Goat>({
       if (season === "spring") for (let x = 5; x < W; x += 17) { b.fillStyle = x % 2 ? "#e88bb0" : "#f2c94c"; b.fillRect(k.px(x), k.px(GROUND - 1), s3, s3); }
       const post = paint(POST, theme);
       b.drawImage(post, k.px(s.postX - 1), k.px(GROUND - 7 - 1), post.width * s3, post.height * s3);
+      const rock = paint(BOULDER, theme, false, { o: P.mount! });
+      b.drawImage(rock, k.px(s.rockX - 1), k.px(GROUND - 3 - 1), rock.width * s3, rock.height * s3);
     });
     v.drawImage(back, 0, 0);
 
@@ -258,11 +271,16 @@ export const mountain = defineScene<State, Goat>({
     }
 
     // The hiker, or the tent while resting.
+    const seated = k.resting && (k.reduced || Math.abs(rockSpot(s) - s.x) <= 0.3);
     if (mk === "rate") {
       k.blit(paint(TENT, theme), s.tentX - 1, GROUND - 5);
+    } else if (seated) {
+      // Resting on the boulder, the pack set down beside it.
+      k.blit(paint(PACK, theme), s.rockX - 3 - 1, GROUND - 3 - 1);
+      k.blit(paint(HIKER.sit, theme), s.x - 1, GROUND - 11);
     } else {
       const arrived = mk !== "waiting" || k.reduced || Math.abs(postSpot(s) - s.x) <= 0.3;
-      const walking = (mk === "working" || !arrived) && !k.reduced;
+      const walking = (mk === "working" || !arrived || k.resting) && !k.reduced;
       const selfie = k.gagging("selfie"), bar = k.gagging("granola"), hat = k.gagging("hat");
       const front = (mk === "waiting" && arrived) || (selfie !== null && selfie > 0.1 && selfie < 0.9) || (bar !== null && bar > 0.72) || (hat !== null && hat > 0.15 && hat < 0.85);
       let pose: Sprite = front ? HIKER.front : walking && !k.gagId && Math.floor(t / TIME.beat) % 2 ? HIKER.walk2 : HIKER.walk1;
@@ -284,6 +302,7 @@ export const mountain = defineScene<State, Goat>({
     const mk = k.mood.kind;
     if (s.marmot !== null || s.eagle !== null) return "fast";
     if (k.crew.some((c) => c.leaving || Math.abs(c.x - c.tx) >= 0.5)) return "fast";
+    if (k.resting) return Math.abs(rockSpot(s) - s.x) > 0.3 ? "fast" : k.season === "winter" ? "slow" : "still";
     if (mk === "working") return "fast";
     return mk === "waiting" || mk === "error" ? "slow" : "still";
   },

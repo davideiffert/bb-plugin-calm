@@ -10,7 +10,9 @@
 // saucer zips past. Taps: a wave, "♪ beep". Seasons: none out here. Gags:
 // the astronaut drops a wrench and chases it in slow motion; a satellite
 // bonks the helmet; a tiny alien waves from the planet, and the astronaut
-// waves back.
+// waves back. At rest between runs (scenes shown always): the astronaut is
+// back inside the capsule with the window lit, as when rate-limited, and the
+// stars twinkle slowly.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { rowOf, type AlertSpec } from "../kit/alert";
 import { glow, seeded, sprite, type Motion, type Sprite } from "../kit/common";
@@ -61,12 +63,17 @@ interface State {
   stars: { x: number; y: number; ph: number }[];
   flip: number | null;
   saucer: number | null;
+  /** 0 = out on the tether, 1 = inside the capsule (resting). */
+  reel: number;
 }
 /** A child thread, shown as a satellite with panels in its color. */
 interface Sat { x: number; y: number; dir: 1 | -1; speed: number }
 type K = Kit<State, Sat>;
 
 const FLIP_SECONDS = 1.2;
+/** Inside the capsule: rate-limited, or resting between runs and reeled all the way in. */
+const inside = (s: State, k: K) => k.mood.kind === "rate" || s.reel >= 1;
+const REEL_SECONDS = 2.5;
 const somersault = (s: State) => { if (s.flip !== null) return false; s.flip = 0; return true; };
 /** The astronaut's place: drifting on the tether out from the capsule. */
 function astroXY(s: State, k: K): [number, number] {
@@ -75,7 +82,10 @@ function astroXY(s: State, k: K): [number, number] {
   const wrench = k.gagging("wrench"), bonk = k.gagging("bonk");
   const chase = wrench !== null ? Math.sin(Math.PI * Math.min(1, wrench * 1.15)) * 7 : 0;
   const knock = bonk !== null && bonk > 0.45 ? Math.sin(Math.PI * (bonk - 0.45) / 0.55) * -3 : 0;
-  return [s.capX + 16 + chase + knock + (still ? 0 : Math.sin(k.t * 0.35) * 5), 4 + (still ? 0 : Math.sin(k.t * 0.5) * 1.5)];
+  const out: [number, number] = [s.capX + 16 + chase + knock + (still ? 0 : Math.sin(k.t * 0.35) * 5), 4 + (still ? 0 : Math.sin(k.t * 0.5) * 1.5)];
+  // Reeling in to the hatch, or paying out again.
+  const hatch: [number, number] = [s.capX + 1, 6];
+  return [out[0] + (hatch[0] - out[0]) * s.reel, out[1] + (hatch[1] - out[1]) * s.reel];
 }
 
 // -- The helper alert --------------------------------------------------------
@@ -103,7 +113,7 @@ const alert: AlertSpec = {
 export const space = defineScene<State, Sat>({
   id: "space",
   name: "Space",
-  state: () => ({ capX: 20, planetX: 0, stars: [], flip: null, saucer: null }),
+  state: () => ({ capX: 20, planetX: 0, stars: [], flip: null, saucer: null, reel: 0 }),
 
   layout(s, k) {
     const W = k.W;
@@ -115,7 +125,7 @@ export const space = defineScene<State, Sat>({
   // A new run: out on the tether, mid-somersault.
   start(s, k) { if (k.mood.kind === "working") somersault(s); },
 
-  focus: (s, k) => (k.mood.kind === "rate" ? s.capX + 4 : astroXY(s, k)[0] + 3),
+  focus: (s, k) => (inside(s, k) ? s.capX + 4 : astroXY(s, k)[0] + 3),
 
   crew: {
     max: (k) => (k.narrow ? 2 : 4),
@@ -137,7 +147,7 @@ export const space = defineScene<State, Sat>({
 
   hits(s, k) {
     const [ax, ay] = astroXY(s, k);
-    const out: HitTarget[] = [k.mood.kind === "rate"
+    const out: HitTarget[] = [inside(s, k)
       ? { target: "lead", box: [s.capX, 7, 8, 7], at: [s.capX + 4, 7] }
       : { target: "lead", box: [ax, ay, ASTRO_W, 8], at: [ax + 3, ay] }];
     for (const c of k.crew) if (!c.leaving) out.push({ target: "member", id: c.id, box: [c.x - 1, c.y - 1, 6, 5], at: [c.x + 2, c.y] });
@@ -149,11 +159,12 @@ export const space = defineScene<State, Sat>({
     if (hit.target === "lead") k.react("astro", TIME.tap);
   },
 
-  errorCloudX: (s, k) => (k.mood.kind === "rate" ? s.capX : astroXY(s, k)[0] - 3),
+  errorCloudX: (s, k) => (inside(s, k) ? s.capX : astroXY(s, k)[0] - 3),
 
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (s.flip !== null && (s.flip += dt) > FLIP_SECONDS) s.flip = null;
+    s.reel = k.resting ? Math.min(1, s.reel + dt / REEL_SECONDS) : Math.max(0, s.reel - dt / REEL_SECONDS);
     for (const c of k.crew) {
       if (c.leaving) { c.x += c.dir * SPEED.drift * dt; c.alpha -= dt / 1.5; continue; }
       const entering = c.x < 6 || c.x > k.W - 10;
@@ -168,6 +179,7 @@ export const space = defineScene<State, Sat>({
   settle(s, k) {
     s.flip = null;
     s.saucer = null;
+    s.reel = k.resting ? 1 : 0;
     k.crew = k.crew.filter((c) => !c.leaving);
     for (const c of k.crew) c.x = Math.max(6, Math.min(c.x, k.W - 10));
   },
@@ -178,7 +190,7 @@ export const space = defineScene<State, Sat>({
 
     // Stars, twinkling.
     for (const st of s.stars) {
-      v.globalAlpha = k.reduced ? 0.7 : 0.4 + 0.4 * Math.sin(t * 0.9 + st.ph);
+      v.globalAlpha = k.reduced ? 0.7 : 0.4 + 0.4 * Math.sin(t * (k.resting ? 0.35 : 0.9) + st.ph);
       k.dot(st.x, st.y, P.star!);
     }
     v.globalAlpha = 1;
@@ -218,11 +230,11 @@ export const space = defineScene<State, Sat>({
     }
 
     // The capsule: its window lit while the astronaut is inside.
-    const inside = mk === "rate";
-    k.blit(paint(CAPSULE, theme, false, inside ? { q: P.lights! } : undefined), s.capX - 1, 7);
-    if (inside) glow(v, k.view, s.capX + 4, 10, 2, P.lights!, 0.6);
+    const within = inside(s, k);
+    k.blit(paint(CAPSULE, theme, false, within ? { q: P.lights! } : undefined), s.capX - 1, 7);
+    if (within) glow(v, k.view, s.capX + 4, 10, 2, P.lights!, 0.6);
 
-    if (!inside) {
+    if (!within) {
       const [ax, ay] = astroXY(s, k);
       // The tether, sagging gently.
       const hx = s.capX + 7, hy = 11, tx = ax, ty = ay + 5;
@@ -252,6 +264,8 @@ export const space = defineScene<State, Sat>({
     const mk = k.mood.kind;
     if (s.flip !== null || s.saucer !== null) return "fast";
     if (k.crew.some((c) => c.leaving || c.x < 6 || c.x > k.W - 10)) return "fast";
+    if (k.resting) return s.reel < 1 ? "fast" : "slow";   // reeling in; then the stars twinkle, the window glows
+    if (s.reel > 0) return "fast";   // paying out again
     if (mk === "working") return "fast";
     // Stars twinkle and the helmet light blinks: gentle.
     return mk === "idle" ? "still" : "slow";

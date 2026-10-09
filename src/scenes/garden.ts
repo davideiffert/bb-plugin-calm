@@ -9,7 +9,8 @@
 // snow on the fence, tulips in spring, sunflowers in summer, pumpkins in
 // autumn. Gags: a mole pops up and steals a carrot behind the gardener's
 // back; a hidden sprinkler surprises the gardener; the gardener sniffs a
-// flower and sneezes.
+// flower and sneezes. At rest between runs (scenes shown always): a nap on
+// the bench, as when rate-limited.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, rowOf, type AlertSpec } from "../kit/alert";
 import { SNOW, floatNote, sprite, type Motion, type Sprite } from "../kit/common";
@@ -140,6 +141,10 @@ interface Bee { flower: number; phase: number; x: number; y: number }
 type K = Kit<State, Bee>;
 
 const WATER_SECONDS = 2.2;
+/** Where the gardener stands to sit down: at the bench. */
+const benchSpot = (s: State) => s.benchX;
+/** On the bench: rate-limited, or resting between runs and arrived there. */
+const napping = (s: State, k: K) => k.mood.kind === "rate" || (k.resting && (k.reduced || Math.abs(benchSpot(s) - s.x) <= 0.3));
 const BLOOM_SECONDS = TIME.reaction;
 const beeSpot = (s: State, b: Bee, t: number, still: boolean): [number, number] => {
   const f = s.flowers[b.flower % s.flowers.length];
@@ -205,7 +210,7 @@ export const garden = defineScene<State, Bee>({
     if (k.mood.kind === "working") bloom(s);
   },
 
-  focus: (s, k) => (k.mood.kind === "rate" ? s.benchX + 5 : s.x + GARDENER_W / 2),
+  focus: (s, k) => (napping(s, k) ? s.benchX + 5 : s.x + GARDENER_W / 2),
 
   crew: {
     max: (k) => (k.narrow ? 2 : 4),
@@ -223,8 +228,7 @@ export const garden = defineScene<State, Bee>({
   },
 
   hits(s, k) {
-    const mk = k.mood.kind;
-    const out: HitTarget[] = [mk === "rate"
+    const out: HitTarget[] = [napping(s, k)
       ? { target: "lead", box: [s.benchX, GROUND - 10, 10, 10], at: [s.benchX + 5, GROUND - 10] }
       : { target: "lead", box: [s.x, GROUND - 12, GARDENER_W, 12], at: [s.x + 4, GROUND - 12] }];
     for (const c of k.crew) if (!c.leaving) out.push({ target: "member", id: c.id, box: [c.x - 1, c.y - 1, 6, 4], at: [c.x + 2, c.y - 1] });
@@ -238,14 +242,14 @@ export const garden = defineScene<State, Bee>({
     else { const f = s.flowers[Number(hit.id)]; if (f) k.react(f, TIME.tap); }
   },
 
-  errorCloudX: (s, k) => (k.mood.kind === "rate" ? s.benchX : s.x - 2),
+  errorCloudX: (s, k) => (napping(s, k) ? s.benchX : s.x - 2),
 
   update(s, k, dt) {
     const mk = k.mood.kind;
     for (const f of s.flowers) if (f.pop !== null && (f.pop += dt / BLOOM_SECONDS) >= 1) f.pop = null;
     if (mk === "working" && k.gagId) {
       // A gag holds the gardener still.
-    } else if (mk === "working") {
+    } else if (mk === "working" && !k.resting) {
       const goal = s.flowers[s.target]?.x ?? s.x;
       const stand = goal - (s.dir > 0 ? GARDENER_W + 1 : -3);
       const dx = stand - s.x;
@@ -263,6 +267,10 @@ export const garden = defineScene<State, Bee>({
           s.dir = s.flowers[next].x > s.x ? 1 : -1;
         }
       }
+    } else if (k.resting) {   // off to the bench for a nap
+      s.watering = 0;
+      const dx = benchSpot(s) - s.x;
+      if (Math.abs(dx) > 0.3) { s.dir = dx > 0 ? 1 : -1; s.x += s.dir * Math.min(Math.abs(dx), SPEED.trot * dt); }
     }
     for (const c of k.crew) {
       if (c.leaving) { c.y -= dt * 4; c.alpha -= dt / 1.2; continue; }
@@ -278,6 +286,7 @@ export const garden = defineScene<State, Bee>({
     for (const f of s.flowers) f.pop = null;
     s.hedgehog = null;
     s.watering = 0;
+    if (k.resting) s.x = benchSpot(s);
     k.crew = k.crew.filter((c) => !c.leaving);
     for (const c of k.crew) [c.x, c.y] = beeSpot(s, c, 0, true);
   },
@@ -333,11 +342,11 @@ export const garden = defineScene<State, Bee>({
     if (s.hedgehog !== null && !k.reduced) k.blit(paint(HEDGEHOG, theme), -8 + s.hedgehog * (W + 16), GROUND - 4);
 
     // The gardener: walking, watering, facing you, or napping on the bench.
-    if (mk === "rate") {
+    if (napping(s, k)) {
       k.blit(paint(GARDENER.nap, theme), s.benchX - 1, GROUND - 11);
     } else {
-      const watering = mk === "working" && s.watering > 0;
-      const walking = mk === "working" && !watering && !k.reduced;
+      const watering = mk === "working" && !k.resting && s.watering > 0;
+      const walking = mk === "working" && !watering && !k.reduced;   // including the walk to the bench
       const mole = k.gagging("mole"), sprinkler = k.gagging("sprinkler"), sneeze = k.gagging("sneeze");
       const facing = (mole !== null && mole > 0.85) || (sprinkler !== null && sprinkler > 0.3);
       const leaning = sneeze !== null && sneeze > 0.15 && sneeze < 0.5;
@@ -371,7 +380,7 @@ export const garden = defineScene<State, Bee>({
     if (e > 0.5) k.fireflies(23, 4, 3, 6);
 
     // Tap notes.
-    k.note("gardener", "♪ hello", mk === "rate" ? s.benchX + 5 : s.x + 4, GROUND - 13);
+    k.note("gardener", "♪ hello", napping(s, k) ? s.benchX + 5 : s.x + 4, GROUND - 13);
     for (const f of s.flowers) k.note(f, "♪", f.x + 1, GROUND - 6);
     for (const c of k.crew) k.note(c, "♪ bzz", c.x + 2, c.y - 2);
   },
@@ -380,6 +389,7 @@ export const garden = defineScene<State, Bee>({
     const mk = k.mood.kind;
     if (s.flowers.some((f) => f.pop !== null) || s.hedgehog !== null) return "fast";
     if (k.crew.some((c) => c.leaving) || (mk !== "idle" && k.crew.some((c) => c.kind === "working"))) return "fast";
+    if (k.resting) return napping(s, k) ? (k.evening() > 0.5 ? "slow" : "still") : "fast";   // napping: only the fireflies move
     if (mk === "working") return "fast";
     // The held lantern's pulse, the rain: gentle. A nap on the bench is still.
     return mk === "waiting" || mk === "error" ? "slow" : "still";

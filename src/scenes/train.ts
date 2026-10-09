@@ -11,7 +11,8 @@
 // covers the ground in winter. Gags: a cow stands on the tracks, so the
 // train stops, toots, and waits for it to amble off; the conductor's hat
 // blows off and lands on the last car; a long whistle puffs steam into a
-// heart.
+// heart. At rest between runs (scenes shown always): it eases to a stop in
+// plain view, headlamp off, with a thin wisp from the stack now and then.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, rowOf, type AlertSpec } from "../kit/alert";
 import { SNOW, floatNote, glow, seeded, sprite, type Motion, type Sprite } from "../kit/common";
@@ -186,13 +187,15 @@ export const train = defineScene<State, Car>({
     const inView = front > Math.min(k.W * 0.3, ENGINE_W + 30) && front < k.W - 8;
     // Coming round to be seen, it hurries a little.
     const cow = k.gagging("cow");
-    const target = mk === "working" ? (cow !== null && cow < 0.82 ? 0 : RUN) : s.speed > 0 && !inView ? RUN * 2.2 : 0;
+    const target = mk === "working" && !k.resting ? (cow !== null && cow < 0.82 ? 0 : RUN) : s.speed > 0 && !inView ? RUN * 2.2 : 0;
     s.speed += (target - s.speed) * Math.min(1, dt * (target ? 0.8 : 2.4));
     if (s.speed < 0.05 && !target) s.speed = 0;
     s.x += s.speed * dt;
     // Smoke from the stack while it runs.
     s.sinceSmoke += dt;
     if (s.speed > 0.3 && s.sinceSmoke > 0.7) { s.sinceSmoke = 0; s.puffs.push({ x: s.x - FUNNEL - 1, y: GROUND - 10, k: 0, big: false }); }
+    // Standing at rest, the banked fire sends up a thin wisp every few seconds.
+    if (k.resting && s.speed === 0 && s.sinceSmoke > 4) { s.sinceSmoke = 0; s.puffs.push({ x: s.x - FUNNEL - 1, y: GROUND - 10, k: 0.5, big: false }); }
     for (const p of s.puffs) { p.k += dt / (p.big ? 1.6 : 2.4); p.y -= dt * (p.big ? 2.5 : 2); p.x -= dt * (1 + s.speed * 0.3); }
     s.puffs = s.puffs.filter((p) => p.k < 1);
     for (const c of k.crew) {
@@ -205,7 +208,7 @@ export const train = defineScene<State, Car>({
   settle(s, k) {
     s.puffs = [];
     s.farTrain = null;
-    s.speed = k.mood.kind === "working" ? RUN : 0;
+    s.speed = k.mood.kind === "working" && !k.resting ? RUN : 0;
     // A still picture shows the engine: bring it into view.
     const front = wrapX(s, k, s.x);
     if (front < ENGINE_W + 30 || front > k.W - 8) s.x = k.W * 0.6;
@@ -247,7 +250,7 @@ export const train = defineScene<State, Car>({
     const span = W + lengthOf(k) + 8;
     const jig = k.reduced || s.speed < 0.3 ? 0 : (Math.floor(t * 6) % 2) * 0.34;
     const lit = e > 0.5;
-    const lamp = lit && mk !== "waiting";   // the headlamp goes dark while the signal is amber
+    const lamp = lit && mk !== "waiting" && !k.resting;   // the headlamp goes dark while the signal is amber, and at rest
     const draw = (rows: Sprite, x: number, y: number, extra?: Record<string, string>, alpha = 1, flip = false) => {
       for (const off of [0, -span]) {   // drawn twice so it wraps cleanly off the right edge
         const xx = x + off;
@@ -296,11 +299,13 @@ export const train = defineScene<State, Car>({
   },
 
   motion(s, k): Motion {
+    // Standing at rest, the odd wisp from the stack is a gentle change, not motion.
+    if (k.resting && s.speed === 0 && s.farTrain === null && !k.crew.some((c) => c.leaving || c.fade < 1)) return "slow";
     if (s.speed > 0 || s.puffs.length || s.farTrain !== null) return "fast";
     if (k.crew.some((c) => c.leaving || c.fade < 1)) return "fast";
     // A blinking signal, the rain: gentle. A resting train at a red signal is still.
     const mk = k.mood.kind;
-    return mk === "waiting" || mk === "error" ? "slow" : "still";
+    return mk === "waiting" || mk === "error" || k.resting ? "slow" : "still";
   },
 
   gags: [

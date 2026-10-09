@@ -211,7 +211,7 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
   const always = prefs.show === "always";
   const resting = always && own.kind === "idle" && !crewOnly;
   const mood: Mood = crewOnly ? { kind: "working", turnStartedAt: null, resetsAt: null, since: 0 }
-    : resting ? { ...own, kind: "working", turnStartedAt: null } : own;
+    : resting ? { ...own, kind: "working", turnStartedAt: null, resting: true } : own;
   const view = { ...state, crew, mood: own };
 
   const theme: ThemeMode = useThemeMode();
@@ -301,7 +301,7 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
   }, [mounted]);
 
   // Hand the mood and crew to the scene. A new run starts mid-scene.
-  const moodKey = `${mood.kind}:${mood.turnStartedAt}:${mood.resetsAt}:${crewOnly}`;
+  const moodKey = `${mood.kind}:${mood.turnStartedAt}:${mood.resetsAt}:${crewOnly}:${mood.resting ?? false}`;
   useEffect(() => {
     // A helper alert replaces the scene; the scene plays only for the main agent.
     if (visible && !crewOnly) scene.setMood(mood);
