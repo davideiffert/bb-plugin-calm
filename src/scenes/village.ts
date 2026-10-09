@@ -192,6 +192,22 @@ export const village = defineScene<State, Snowman>({
 
   errorCloudX: (s, k) => (indoors(s, k) ? s.houses[0] : s.x - 4),
 
+  // Below the lane: packed snow over frozen ground, with the sled's tracks.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, dark = k.theme === "dark";
+    const rows = Math.round(Math.min(b.H, 9) * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.3 : 0.45) * (1 - y / 9);
+      v.fillStyle = y < 3 ? SNOW[k.theme] : P.i!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.35 : 0.3) * b.level;
+    v.fillStyle = P.i!;
+    for (let x = 0; x < b.W; x += 3) { b.dot(x, 1); if (rows > 2) b.dot(x + 1, 2); }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (mk === "working" && k.gagId) {

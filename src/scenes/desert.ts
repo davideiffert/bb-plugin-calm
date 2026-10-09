@@ -197,6 +197,24 @@ export const desert = defineScene<State, Quail>({
 
   errorCloudX: (s, k) => (k.mood.kind === "rate" ? shade(s) : s.x + 2),
 
+  // Below the road: hard-packed sand, the saguaros' shallow roots, and buried stones.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, dark = k.theme === "dark";
+    const rows = Math.round(Math.min(b.H, 9) * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.45 : 0.35) * (1 - y / 9);
+      v.fillStyle = y < 1 ? P.road! : P.sand!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.4 : 0.35) * b.level;
+    v.fillStyle = P.t!;
+    for (const x of s.saguaros) for (let y = 1; y < Math.min(rows, 4); y++) { b.dot(x + 2 - (y - 1) * 2, y); b.dot(x + 2 + (y - 1) * 2, y); }
+    v.fillStyle = P.R!;
+    for (let x = 9; x < b.W; x += 27) if (rows > 4) { b.dot((x * 7) % b.W, 4 + (x % 4)); b.dot((x * 7) % b.W + 1, 4 + (x % 4)); }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     s.burst = Math.max(0, s.burst - dt);

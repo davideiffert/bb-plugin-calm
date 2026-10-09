@@ -175,6 +175,25 @@ export const mountain = defineScene<State, Goat>({
 
   errorCloudX: (s, k) => (k.mood.kind === "rate" ? s.tentX - 2 : s.x - 2),
 
+  // Below the trail: scree and bedrock fading down, the pines' roots, and a marmot's burrow.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, dark = k.theme === "dark";
+    const rows = Math.round(Math.min(b.H, 10) * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.45 : 0.35) * (1 - y / 10);
+      v.fillStyle = y < 2 ? P.ground! : P.mount!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.4 : 0.35) * b.level;
+    v.fillStyle = P.w!;
+    for (const x of s.pines) for (let y = 0; y < Math.min(rows, 3); y++) b.dot(x + 2 + (y === 2 ? 1 : 0), y);
+    v.fillStyle = P.o!;
+    for (let x = 7; x < b.W; x += 31) if (rows > 4) { b.dot((x * 5) % b.W, 4 + (x % 4)); b.dot((x * 5) % b.W + 1, 4 + (x % 4)); }
+    if (rows > 3) { v.fillStyle = P.k!; for (let y = 0; y < Math.min(rows - 1, 4); y++) b.dot(s.burrow + 1 + (y % 2), y + 1); }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (mk === "working" && k.gagId) {

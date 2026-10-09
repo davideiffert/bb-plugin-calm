@@ -19,9 +19,10 @@
   strip moves to a slot right above the prompt box, below bb's cards such as
   the commit summary, and sits flush on it with the box's top corners
   squared, so the two read as one picture. While the strip shows, what lies
-  below the scene carries on faintly behind the text you type: the Sea, Pond, Underwater, and Lighthouse put water and
-  fish, bubbles, or ripples there; the Night sky and Space put stars; the
-  Pasture its soil and roots; the rest a wash of the sky's glow. It rises in
+  below the scene carries on faintly behind the text you type: water with fish, bubbles, or ripples under the Sea,
+  Pond, Underwater, and Lighthouse; stars under the Night sky and Space; and
+  under the land scenes the ground itself, with roots, stones, a burrow, the
+  railway's ballast, the building's lower floors, the fire's warmth. It rises in
   as the strip opens and drains as it closes. It depends on bb's prompt box
   markup and does nothing when that isn't recognized. Inspired by Gone
   Fishing's flooded chat input.

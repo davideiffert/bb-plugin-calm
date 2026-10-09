@@ -225,6 +225,27 @@ export const campfire = defineScene<State, Friend>({
 
   errorCloudX: (s) => (s.inside ? s.tentX : s.cx - 1),
 
+  // Below the camp: packed earth with stones, and the fire's warmth seeping down while it burns.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, dark = k.theme === "dark", t = k.t;
+    const rows = Math.round(Math.min(b.H, 9) * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.45 : 0.35) * (1 - y / 9);
+      v.fillStyle = P.ground!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    if (s.fire > 0.15) {
+      v.globalAlpha = 0.18 * s.fire * b.level * (k.reduced ? 1 : 0.85 + 0.15 * Math.sin(t * 7));
+      v.fillStyle = P.flame!;
+      for (let y = 0; y < Math.min(rows, 4); y++) v.fillRect(b.px(s.fireX - 4 + y), b.px(y), (13 - y * 2) * b.s3, b.s3);
+    }
+    v.globalAlpha = (dark ? 0.45 : 0.35) * b.level;
+    v.fillStyle = P.k!;
+    for (let x = 3; x < b.W; x += 23) if (rows > 2) { b.dot((x * 7) % b.W, 2 + (x % 4)); b.dot((x * 7) % b.W + 1, 2 + (x % 4)); }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     // A rest lets the fire die down; work brings it back.

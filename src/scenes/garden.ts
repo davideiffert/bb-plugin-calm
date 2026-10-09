@@ -244,6 +244,27 @@ export const garden = defineScene<State, Bee>({
 
   errorCloudX: (s, k) => (napping(s, k) ? s.benchX : s.x - 2),
 
+  // Below the bed: soil, with the flowers' roots reaching down and a worm.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, dark = k.theme === "dark", t = k.t;
+    const rows = Math.round(Math.min(b.H, 10) * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.45 : 0.35) * (1 - y / 10);
+      v.fillStyle = P.soil!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.4 : 0.35) * b.level;
+    v.fillStyle = P.l!;
+    for (const f of s.flowers) for (let y = 0; y < Math.min(rows, 4); y++) b.dot(f.x + 1 + (y % 2 ? (f.x % 2 ? 1 : -1) : 0), y);
+    if (rows > 5) {
+      v.fillStyle = P.o!;
+      const wx = (t * 1.5) % (b.W + 8) - 4;
+      for (let i = 0; i < 4; i++) b.dot(wx + i, 6 + (Math.floor(t * 2 + i) % 2));
+    }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     for (const f of s.flowers) if (f.pop !== null && (f.pop += dt / BLOOM_SECONDS) >= 1) f.pop = null;

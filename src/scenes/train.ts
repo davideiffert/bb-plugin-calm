@@ -179,6 +179,24 @@ export const train = defineScene<State, Car>({
 
   errorCloudX: (s, k) => wrapX(s, k, s.x) - ENGINE_W,
 
+  // Below the line: the ballast under the ties, and the embankment fading down.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, dark = k.theme === "dark";
+    const rows = Math.round(Math.min(b.H, 9) * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.45 : 0.35) * (1 - y / 9);
+      v.fillStyle = P.hill!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.5 : 0.45) * b.level;
+    v.fillStyle = P.tie!;
+    for (let x = 0; x < b.W; x += 4) b.dot(x, 0); 
+    v.fillStyle = P.rail!;
+    for (let x = 1; x < b.W; x += 7) if (rows > 2) b.dot((x * 13) % b.W, 1 + (x % 3));
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     // Running while working. Otherwise it rolls on until the engine is in

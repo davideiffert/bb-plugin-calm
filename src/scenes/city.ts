@@ -199,6 +199,25 @@ export const city = defineScene<State, Pigeon>({
 
   errorCloudX: (s, k) => (k.mood.kind === "rate" ? s.ventX + 2 : s.x - 2),
 
+  // Below the ledge: the building's own floors, their windows lighting up as evening comes.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, dark = k.theme === "dark", e = k.evening();
+    const rows = Math.round(b.H * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.4 : 0.3) * (1 - y / Math.max(10, b.H));
+      v.fillStyle = P.sky2!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    const rnd = seeded(b.W * 7 + 3);
+    for (let y = 2; y < rows; y += 4) for (let x = 3; x < b.W - 2; x += 5) {
+      const on = rnd() < 0.15 + e * 0.5;
+      v.globalAlpha = (on ? (dark ? 0.6 : 0.55) : (dark ? 0.3 : 0.25)) * b.level;
+      b.dot(x, y, on ? P.lit! : P.window!);
+    }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (mk === "working" && k.gagId) {

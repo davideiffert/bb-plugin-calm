@@ -170,6 +170,24 @@ export const kites = defineScene<State, Kite>({
 
   errorCloudX: (s, k) => kitePos(s, k)[0] - 4,
 
+  // Below the hill: turf over earth, the tree's roots, and a rabbit hole.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, dark = k.theme === "dark";
+    const rows = Math.round(Math.min(b.H, 9) * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.45 : 0.35) * (1 - y / 9);
+      v.fillStyle = y < 2 ? P.hill! : P.w!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.45 : 0.4) * b.level;
+    v.fillStyle = P.g!;
+    for (let x = 4; x < b.W; x += 19) b.dot((x * 3) % b.W, 0);
+    v.fillStyle = P.w!;
+    for (let y = 0; y < Math.min(rows, 5); y++) { b.dot(s.treeX - 1 - Math.floor(y / 2), y); b.dot(s.treeX + 1 + Math.floor(y / 2), y); }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (s.loop !== null && (s.loop += dt) > LOOP_SECONDS) s.loop = null;

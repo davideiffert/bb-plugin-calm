@@ -207,6 +207,22 @@ export const balloons = defineScene<State, Small>({
 
   errorCloudX: (s) => s.x - 1,
 
+  // Below the mesa: layered sandstone fading down, with a few pebbles.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, dark = k.theme === "dark";
+    const rows = Math.round(Math.min(b.H, 10) * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.45 : 0.35) * (1 - y / 10);
+      v.fillStyle = y % 4 === 2 ? P.mesaTop! : P.mesa!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.4 : 0.3) * b.level;
+    v.fillStyle = P.k!;
+    for (let x = 5; x < b.W; x += 29) if (rows > 3) b.dot((x * 11) % b.W, 2 + (x % 5));
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (s.flare !== null && (s.flare += dt) > TIME.reaction) s.flare = null;
