@@ -14,6 +14,8 @@ export interface SpillOptions {
   /** Paint the layer: `level` is how far in the spill is, 0 to 1 (eased). */
   draw: (ctx: CanvasRenderingContext2D, cssWidth: number, cssHeight: number, level: number) => void;
   isReducedMotion: () => boolean;
+  /** Start full rather than rising in: the strip was already up when its thread opened. */
+  instant?: boolean;
 }
 
 /** Moves the level toward its target at a constant rate. */
@@ -68,6 +70,7 @@ class Spill {
     this.options = options;
     this.target = 1;
     if (!this.layer.isConnected) {
+      if (options.instant) this.level = 1;
       // The original value lives on the element, so an older bundle's drain
       // after a plugin reload still restores it.
       const s = this.surface;

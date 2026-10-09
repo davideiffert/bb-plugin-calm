@@ -15,9 +15,11 @@
   along the tether, the kite and balloon come down, and the anchor drops. The
   next run picks each up where it left off, walking back out to work.
   Scenes tell rest from work through the kit's `resting`.
-- Experimental: **Spill into the prompt box**, off by default in Features.
-  While the strip shows, what lies below the scene carries on faintly behind
-  the text you type: the Sea, Pond, Underwater, and Lighthouse put water and
+- Experimental: **Join the prompt box**, off by default in Features. The
+  strip moves to a slot right above the prompt box, below bb's cards such as
+  the commit summary, and sits flush on it with the box's top corners
+  squared, so the two read as one picture. While the strip shows, what lies
+  below the scene carries on faintly behind the text you type: the Sea, Pond, Underwater, and Lighthouse put water and
   fish, bubbles, or ripples there; the Night sky and Space put stars; the
   Pasture its soil and roots; the rest a wash of the sky's glow. It rises in
   as the strip opens and drains as it closes. It depends on bb's prompt box

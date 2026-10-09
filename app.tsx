@@ -2,8 +2,10 @@
 // above the prompt box while the viewed thread, or its crew of child threads,
 // has something to show, or all the time when scenes are set to show always.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { createPortal } from "react-dom";
 import {
   definePluginApp,
+  experimental_usePluginId,
   useComposer,
   useRealtime,
   useRealtimeConnectionState,
@@ -21,6 +23,7 @@ import { GlowLayer } from "./src/glow";
 import { useReducedMotion } from "./src/motion";
 import { usePrefs, useThreadPrefs } from "./src/use-prefs";
 import { spill } from "./src/spill";
+import { insertComposerSlot, squareComposerTop } from "./src/composer-dom";
 import { CalmHeaderControl } from "./src/header-control";
 import { CalmSettings } from "./src/settings-section";
 import { ALERT_HEIGHT, HelperAlertRow } from "./src/crew-alert";
@@ -33,6 +36,8 @@ const FADE_MS = 400;      // with scenes shown always, a new scene fades in this
 const FADE_OUT_MS = 200;  // and an idle strip's old scene fades out this fast first
 const TAP_TIP_MS = 4000;              // how long a tapped tooltip stays on a touch screen
 const WATCH_RENEW_MS = 5 * 60_000;    // the server stops counting a thread's steps 12 minutes after the last renewal
+/** A strip that shows within this long of its thread opening counts as having opened with it. */
+const SETTLE_MS = 2500;
 /** A "working" strip whose composer says nothing is running for this long has missed its run-ended event. */
 const MISSED_END_MS = 10_000;
 
@@ -291,15 +296,38 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
 
+  // Experimental: the strip moves into a slot right above the prompt box,
+  // below bb's cards, and joins it into one box while open. The marker stays
+  // in bb's banner slot so the prompt box can be found from it.
+  const pluginId = experimental_usePluginId();
+  const markerRef = useRef<HTMLSpanElement>(null);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const marker = markerRef.current;
+    if (!features.spill || !marker) return;
+    const created = insertComposerSlot(marker, pluginId);
+    if (!created) return;
+    setSlot(created);
+    return () => { created.remove(); setSlot(null); };
+  }, [features.spill, pluginId]);
+  useLayoutEffect(() => { if (slot) slot.hidden = !mounted; }, [slot, mounted]);
+  useLayoutEffect(() => {
+    const marker = markerRef.current;
+    if (!slot || !open || !marker) return;
+    return squareComposerTop(marker) ?? undefined;
+  }, [slot, open]);
+
   // bb spaces the rows above the prompt box with a gap. Read it so a closed
-  // strip can cancel it and leave no jump when it unmounts.
+  // strip can cancel it and leave no jump when it unmounts. In the slot there
+  // is no gap to cancel.
   const [gap, setGap] = useState(8);
   useLayoutEffect(() => {
+    if (slot) { setGap(0); return; }
     let el = wrapRef.current?.parentElement ?? null;
     while (el && getComputedStyle(el).display === "contents") el = el.parentElement;
     const g = el ? parseFloat(getComputedStyle(el).rowGap) : NaN;
     if (Number.isFinite(g)) setGap(g);
-  }, [mounted]);
+  }, [mounted, slot]);
 
   // Hand the mood and crew to the scene. A new run starts mid-scene.
   const moodKey = `${mood.kind}:${mood.turnStartedAt}:${mood.resetsAt}:${crewOnly}:${mood.resting ?? false}`;
@@ -385,7 +413,8 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
     });
     clock.current = run;
     return () => { run.stop(); clock.current = null; };
-  }, [mounted, crewOnly, scene, kind, theme, reduced, dusk]);
+    // `slot`: moving into the prompt box's slot remounts the canvas, so the loop starts over on the new one.
+  }, [mounted, crewOnly, scene, kind, theme, reduced, dusk, slot]);
   const wake = () => clock.current?.wake();
   // Anything that changes the picture asks for a frame now.
   useEffect(wake, [moodKey, crewKey, tip]);
@@ -393,24 +422,32 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
   // Experimental: the scene spills into the prompt box while it shows, and drains as it closes.
   const reducedRef = useRef(reduced);
   reducedRef.current = reduced;
+  // A thread opened with its strip up shows the water in place; only a strip
+  // that opens later lets it rise. The strip mounts before the preferences
+  // and the mood have loaded, so "with the thread" means within its first
+  // moments rather than on its very first render.
+  const openedAt = useRef(Date.now());
+  const spilled = useRef(false);
   useEffect(() => {
     // The strip's element exists only once mounted, a render after it turns visible.
     const wrap = wrapRef.current;
     if (!visible || !mounted || crewOnly || !features.spill || !wrap) return;
+    const instant = !spilled.current && Date.now() - openedAt.current < SETTLE_MS;
+    spilled.current = true;
     const drain = spill(wrap, {
       draw: (ctx, w, h, level) => scene.drawBelow(ctx, w, h, level),
       isReducedMotion: () => reducedRef.current,
+      instant,
     });
     if (!drain) console.info("Calm: the prompt box wasn't found in this bb's markup; the scene can't spill into it.");
     return drain ?? undefined;
-  }, [visible, mounted, crewOnly, features.spill, scene]);
+  }, [visible, mounted, crewOnly, features.spill, scene, slot]);
 
-  if (!mounted) return null;
   const ease = reduced ? "none" : `height ${EASE_MS}ms ease, margin-bottom ${EASE_MS}ms ease`;
   const spoken = label(own) || "idle";
   const lines = tip ? tipLines(tip.hit, view, Date.now()) : null;
   const width = wrapRef.current?.clientWidth ?? 0;
-  return (
+  const strip = !mounted ? null : (
     <div
       ref={wrapRef}
       className="text-muted-foreground calm-strip"
@@ -466,6 +503,12 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
         </>
       )}
     </div>
+  );
+  return (
+    <>
+      <span ref={markerRef} hidden />
+      {slot && strip ? createPortal(strip, slot) : strip}
+    </>
   );
 }
 
