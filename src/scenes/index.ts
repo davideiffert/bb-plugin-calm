@@ -52,16 +52,19 @@ export function bagIndex(threadId: string, run: number, n: number): number {
 /**
  * The scene for a thread. A scene id picks that scene. "each-thread" hashes
  * the thread id, so a thread always keeps its scene. "each-run" draws from a
- * shuffled bag on every new run. Both draw only from scenes not `excluded`
- * from the random mix. Anything else falls back to the Pasture.
+ * shuffled bag on every new run. "each-project" hashes the project id, so
+ * every thread of a project shares one scene (the thread id stands in until
+ * the project is known). All draw only from scenes not `excluded` from the
+ * random mix. Anything else falls back to the Pasture.
  */
-export function sceneFor(threadId: string, choice: unknown, run = 0, excluded: readonly string[] = []): Scene {
+export function sceneFor(threadId: string, choice: unknown, run = 0, excluded: readonly string[] = [], projectId: string | null = null): Scene {
   const named = SCENES.find((s) => s.id === choice);
   if (named) return named;
   // The random choices draw from the mix: every scene not left out.
   const kept = SCENES.filter((s) => !excluded.includes(s.id));
   const mix = kept.length ? kept : SCENES;
   if (choice === "each-run") return mix[bagIndex(threadId, run, mix.length)];
+  if (choice === "each-project") return mix[hash(projectId ?? threadId) % mix.length];
   if (choice !== "each-thread") return pasture;
   return mix[hash(threadId) % mix.length];
 }

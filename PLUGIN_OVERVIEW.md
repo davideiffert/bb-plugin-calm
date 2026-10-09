@@ -8,7 +8,7 @@ Each of Calm's sixteen scenes has three short gags, with one appearing about eve
 
 ## A different scene each run
 
-The default mix takes you through all your chosen scenes before repeating. Pick a favorite for every run, give each thread its own scene, or remove scenes from the mix.
+The default mix takes you through all your chosen scenes before repeating. Pick a favorite for every run, give each thread or each project its own scene, or remove scenes from the mix.
 
 There is a pasture, a sea, a night sky with an owl, a balloon fiesta, a pond, a train, a garden, a campfire, an underwater reef, a snowy village, a mountain trail, kites, a desert roadrunner, a city rooftop, a lighthouse, and space.
 

@@ -1,6 +1,7 @@
 .calm-settings { display: flex; flex-direction: column; gap: 20px; color: var(--muted-foreground); container-type: inline-size; }
 .calm-tiles { display: grid; grid-template-columns: 1fr; gap: 10px; }
 @container (min-width: 440px) { .calm-tiles { grid-template-columns: 1fr 1fr; } }
+@container (min-width: 680px) { .calm-tiles { grid-template-columns: 1fr 1fr 1fr; } }
 .calm-tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--canvas); color: var(--foreground); text-align: left; cursor: pointer; }
 .calm-tile:hover { background: var(--surface-recessed); }
 .calm-tile[aria-pressed="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- New **One scene per project** choice beside **One scene per thread**. Each
+  project draws one scene from the mix, and every thread in that project shows
+  it. The strip learns the project from the thread's record on open.
+
 ## 1.2.0 (2026-10-08)
 
 - New **Show scenes** setting. **While the agent works** keeps today's

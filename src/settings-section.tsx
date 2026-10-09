@@ -293,6 +293,12 @@ export function CalmSettings() {
           <span className="calm-trio">{mix.slice(0, 3).map((s) => <ScenePreview key={s.id} scene={s} live={false} />)}</span>,
           "Each thread draws one scene from the mix and keeps it, run after run.",
         )}
+        {tile(
+          "each-project",
+          "One scene per project",
+          <span className="calm-trio">{[3, 4, 5].map((i) => mix[i % mix.length]).filter((s, i, a) => a.indexOf(s) === i).map((s) => <ScenePreview key={s.id} scene={s} live={false} />)}</span>,
+          "Each project draws one scene from the mix, and every thread in it shows that scene.",
+        )}
       </div>
       <div className="calm-heading-row">
         <span className="calm-sub">{editing ? "Tap a scene to keep it in the mix or leave it out." : "Or pick one scene to keep."}</span>

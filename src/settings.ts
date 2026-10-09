@@ -4,7 +4,7 @@
 
 /** Every scene id, in picker order. Must match SCENES in src/scenes/index.ts (a test checks). */
 export const SCENE_IDS = ["pasture", "sea", "night", "balloons", "pond", "train", "garden", "campfire", "underwater", "village", "mountain", "kites", "desert", "city", "lighthouse", "space"] as const;
-export const SCENE_CHOICES = [...SCENE_IDS, "each-thread", "each-run"] as const;
+export const SCENE_CHOICES = [...SCENE_IDS, "each-thread", "each-project", "each-run"] as const;
 export const EVENING_CHOICES = [20, 40, 60] as const;
 /** When the strip shows a scene: only while the agent works, or all the time. */
 export const SHOW_CHOICES = ["working", "always"] as const;

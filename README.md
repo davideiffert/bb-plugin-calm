@@ -30,7 +30,7 @@ Open a thread and send a message. Calm appears above the prompt box while the ag
 
 ## A new little world
 
-By default, each run gets a new scene, with no repeats until the mix has gone through them all. Pick a favorite, give each thread its own scene, or leave any scene out of the mix.
+By default, each run gets a new scene, with no repeats until the mix has gone through them all. Pick a favorite, give each thread or each project its own scene, or leave any scene out of the mix.
 
 ![All sixteen Calm scenes.](assets/launch/all-scenes.png)
 

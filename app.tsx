@@ -35,13 +35,13 @@ const WATCH_RENEW_MS = 5 * 60_000;    // the server stops counting a thread's st
 /** A "working" strip whose composer says nothing is running for this long has missed its run-ended event. */
 const MISSED_END_MS = 10_000;
 
-interface ThreadState { mood: Mood; steps: number; crew: CrewMember[] }
+interface ThreadState { mood: Mood; steps: number; crew: CrewMember[]; projectId: string | null }
 
 /** The thread's mood, steps, and crew: fetched on open and on reconnect, then kept live. */
 function useThreadState(threadId: string): ThreadState {
   const rpc = useRpc<typeof rpcContract>();
   const connection = useRealtimeConnectionState();
-  const [state, setState] = useState<ThreadState>({ mood: IDLE, steps: 0, crew: [] });
+  const [state, setState] = useState<ThreadState>({ mood: IDLE, steps: 0, crew: [], projectId: null });
   // Set when a live update lands while the opening read is still out; that update is newer.
   const fresher = useRef({ mood: false, crew: false, steps: false });
   useEffect(() => {
@@ -50,7 +50,7 @@ function useThreadState(threadId: string): ThreadState {
     rpc.call("state_get", { threadId }).then((s) => {
       if (!live) return;
       const f = fresher.current;
-      setState((p) => ({ mood: f.mood ? p.mood : s.mood, crew: f.crew ? p.crew : s.crew, steps: f.steps ? p.steps : s.steps }));
+      setState((p) => ({ mood: f.mood ? p.mood : s.mood, crew: f.crew ? p.crew : s.crew, steps: f.steps ? p.steps : s.steps, projectId: s.projectId ?? p.projectId }));
     }, () => {});
     // Keep the server counting this thread's steps while the strip is open.
     const renew = setInterval(() => {
@@ -254,7 +254,11 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
   // has never run starts on the first run's scene.
   const turns = idleTurns(threadId);
   const place = Math.max(1, own.run ?? 0) + turns;
-  lock.current = lockScene(lock.current, sceneFor(threadId, choice, place, prefs.excluded), `${choice}:${turns}`, mounted, own);
+  // "One scene per project" needs the project id, which arrives with the
+  // first state read; it is part of the key so the strip moves to the
+  // project's scene as soon as it is known.
+  const projectId = choice === "each-project" ? state.projectId : null;
+  lock.current = lockScene(lock.current, sceneFor(threadId, choice, place, prefs.excluded, projectId), `${choice}:${turns}:${projectId ?? ""}`, mounted, own);
   const kind = lock.current.scene;
   motionRef.current.reduced = reduced;
   const dusk = prefs.evening;

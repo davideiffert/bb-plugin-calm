@@ -59,6 +59,7 @@ function SceneIcon({ id, theme }: { id: string; theme: ThemeMode }) {
 const NAMES: Record<string, string> = {
   "each-run": "a new one each time",
   "each-thread": "one per thread",
+  "each-project": "one per project",
   ...Object.fromEntries(SCENES.map((s) => [s.id, s.name])),
 };
 export const choiceName = (choice: string) => NAMES[choice] ?? "a scene";
@@ -86,7 +87,7 @@ export function CalmHeaderControl({ threadId }: PluginThreadHeaderActionProps) {
   if (!prefs.features.header) return null;
 
   // A pinned or chosen scene shows its own icon; a rotating choice shows the sheep.
-  const iconId = threadPrefs.scene ?? (prefs.scene === "each-run" || prefs.scene === "each-thread" ? "pasture" : prefs.scene);
+  const iconId = threadPrefs.scene ?? (prefs.scene === "each-run" || prefs.scene === "each-thread" || prefs.scene === "each-project" ? "pasture" : prefs.scene);
   const label = threadPrefs.off ? "Calm is off in this thread" : threadPrefs.scene ? `Calm: ${choiceName(threadPrefs.scene)} in this thread` : "Calm for this thread";
   const pick = (scene: SceneId | null) => void saveThread({ scene });
   return (
