@@ -10,7 +10,9 @@
 // flutters, a chimney puffs. Seasons: it is always winter here. Gags: a
 // snowball knocks snow off a roof onto a cat; the kid slips on ice, lands on
 // the sled, and slides off; a snowman's head rolls off and the kid puts it
-// back on.
+// back on. At rest between runs (scenes shown always): everyone's indoors
+// and a window glows, as when rate-limited, while the snow and the chimney
+// smoke carry on.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, rowOf, type AlertSpec } from "../kit/alert";
 import { SNOW, glow, seeded, sprite, type Motion, type Sprite } from "../kit/common";
@@ -90,6 +92,8 @@ interface State {
   sleigh: number | null;
   /** Where a gag takes place: the house, the ice, or the snowman. */
   gagX: number;
+  /** Resting: the child has gone in at the first cottage. */
+  inside: boolean;
 }
 /** A child thread, shown as a snowman in a colored scarf. */
 interface Snowman { x: number; built: number }
@@ -103,6 +107,10 @@ const throwBall = (s: State, k: K) => {
   return true;
 };
 
+/** Indoors: rate-limited, or resting between runs and gone in. */
+const indoors = (s: State, k: K) => k.mood.kind === "rate" || s.inside;
+/** Where the child stands to go in: at the first cottage's door. */
+const doorSpot = (s: State) => s.houses[0] + 4;
 /** Where the child stands while waiting: just beside the clock tower. */
 const towerSpot = (s: State) => s.towerX - CHILD_W - 1;
 
@@ -129,7 +137,7 @@ const alert: AlertSpec = {
 export const village = defineScene<State, Snowman>({
   id: "village",
   name: "Snowy village",
-  state: () => ({ x: 30, dir: 1, houses: [], towerX: 0, lampX: 0, ball: null, splat: null, smoke: [], sinceSmoke: 0, sleigh: null, gagX: 0 }),
+  state: () => ({ x: 30, dir: 1, houses: [], towerX: 0, lampX: 0, ball: null, splat: null, smoke: [], sinceSmoke: 0, sleigh: null, gagX: 0, inside: false }),
 
   layout(s, k) {
     const W = k.W;
@@ -142,10 +150,11 @@ export const village = defineScene<State, Snowman>({
   start(s, k) {
     s.x = 10 + Math.random() * (k.W - 30);
     s.dir = Math.random() < 0.5 ? 1 : -1;
+    s.inside = false;
     if (k.mood.kind === "working") throwBall(s, k);
   },
 
-  focus: (s, k) => (k.mood.kind === "rate" ? s.houses[0] + 6 : s.x + CHILD_W / 2),
+  focus: (s, k) => (indoors(s, k) ? s.houses[0] + 6 : s.x + CHILD_W / 2),
 
   crew: {
     max: (k) => (k.narrow ? 2 : 4),
@@ -167,7 +176,7 @@ export const village = defineScene<State, Snowman>({
 
   hits(s, k) {
     const out: HitTarget[] = [];
-    if (k.mood.kind !== "rate") out.push({ target: "lead", box: [s.x, GROUND - 8, CHILD_W, 8], at: [s.x + 2, GROUND - 8] });
+    if (!indoors(s, k)) out.push({ target: "lead", box: [s.x, GROUND - 8, CHILD_W, 8], at: [s.x + 2, GROUND - 8] });
     else out.push({ target: "lead", box: [s.houses[0], GROUND - 8, 13, 8], at: [s.houses[0] + 6, GROUND - 8] });
     for (const c of k.crew) if (!c.leaving) out.push({ target: "member", id: c.id, box: [c.x, GROUND - 8, SNOWMAN_W, 8], at: [c.x + 2, GROUND - 8] });
     s.houses.forEach((hx, i) => out.push({ target: "flock", id: String(i), box: [hx, GROUND - 8, 13, 8], at: [hx + 5, GROUND - 8] }));
@@ -181,20 +190,21 @@ export const village = defineScene<State, Snowman>({
     if (hx !== undefined && !k.reduced) for (let i = 0; i < 3; i++) s.smoke.push({ x: hx + 5, y: GROUND - 9 - i, k: i * 0.15 });
   },
 
-  errorCloudX: (s, k) => (k.mood.kind === "rate" ? s.houses[0] : s.x - 4),
+  errorCloudX: (s, k) => (indoors(s, k) ? s.houses[0] : s.x - 4),
 
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (mk === "working" && k.gagId) {
       // A gag moves the child (see the gags below).
-    } else if (mk === "working") {
+    } else if (mk === "working" && !k.resting) {
       s.x += s.dir * SPEED.walk * 0.8 * dt;
       if (s.x > k.W - CHILD_W - 8) s.dir = -1;
       if (s.x < 8) s.dir = 1;
-    } else if (mk === "waiting") {   // it runs to the clock tower
-      const dx = towerSpot(s) - s.x;
+    } else if (mk === "waiting" || k.resting) {   // it runs to the clock tower, or home to the first cottage
+      const dx = (k.resting ? doorSpot(s) : towerSpot(s)) - s.x;
       if (Math.abs(dx) > 0.3) { s.dir = dx > 0 ? 1 : -1; s.x += s.dir * Math.min(Math.abs(dx), SPEED.trot * dt); }
     }
+    s.inside = k.resting && Math.abs(doorSpot(s) - s.x) <= 0.3;
     if (s.ball && (s.ball.k += dt / 0.7) >= 1) { s.splat = { x: s.ball.x1, k: 0 }; s.ball = null; }
     if (s.splat && (s.splat.k += dt / 0.6) >= 1) s.splat = null;
     s.sinceSmoke += dt;
@@ -218,6 +228,7 @@ export const village = defineScene<State, Snowman>({
     s.smoke = [];
     s.sleigh = null;
     if (k.mood.kind === "waiting") s.x = towerSpot(s);
+    if (k.resting) { s.x = doorSpot(s); s.inside = true; }
     k.crew = k.crew.filter((c) => !c.leaving);
     for (const c of k.crew) c.built = 1;
   },
@@ -232,11 +243,11 @@ export const village = defineScene<State, Snowman>({
     if (s.sleigh !== null && !k.reduced) k.blit(paint(SLEIGH, theme), -8 + s.sleigh * (W + 16), 1 + Math.sin(t * 2) * 0.6);
 
     // Cottages, the clock tower, the lamp, and the snow: cached by time of day.
-    const back = k.layer("village", `${W}:${theme}:${lit}:${mk === "rate"}:${k.s3}`, v.canvas.width, v.canvas.height, (b) => {
+    const back = k.layer("village", `${W}:${theme}:${lit}:${indoors(s, k)}:${k.s3}`, v.canvas.width, v.canvas.height, (b) => {
       const s3 = k.s3;
       const blit = (c: HTMLCanvasElement, x: number, y: number) => b.drawImage(c, k.px(x - 1), k.px(y - 1), c.width * s3, c.height * s3);
       b.globalAlpha = 0.8;   // the cottages sit back so the child reads in front
-      s.houses.forEach((hx, i) => blit(paint(HOUSE, theme, i % 2 === 1, lit || (mk === "rate" && i === 0) ? { w: P.lit! } : undefined), hx, GROUND - 8));
+      s.houses.forEach((hx, i) => blit(paint(HOUSE, theme, i % 2 === 1, lit || (indoors(s, k) && i === 0) ? { w: P.lit! } : undefined), hx, GROUND - 8));
       b.globalAlpha = 1;
       blit(paint(TOWER, theme), s.towerX, GROUND - 9);
       blit(paint(LAMP, theme, false, lit ? { l: P.lit! } : undefined), s.lampX, GROUND - 8);
@@ -266,8 +277,8 @@ export const village = defineScene<State, Snowman>({
     }
 
     // The child and the sled (indoors while resting).
-    if (mk !== "rate") {
-      // Waiting: it walks to the tower first, then turns to face you.
+    if (!indoors(s, k)) {
+      // Waiting: it walks to the tower first, then turns to face you. Resting: it heads home.
       const arrived = mk !== "waiting" || k.reduced || Math.abs(towerSpot(s) - s.x) <= 0.3;
       const walking = (mk === "working" || !arrived) && !k.reduced;
       const slip = k.gagging("slip"), head = k.gagging("snowman");
@@ -307,6 +318,7 @@ export const village = defineScene<State, Snowman>({
     const mk = k.mood.kind;
     if (s.ball || s.splat || s.sleigh !== null) return "fast";
     if (k.crew.some((c) => c.leaving || c.built < 1)) return "fast";
+    if (k.resting) return s.inside ? "slow" : "fast";   // snow falls, chimneys smoke
     if (mk === "working") return "fast";
     // Snow keeps falling and chimneys smoke: gentle, even at rest.
     return mk === "idle" ? "still" : "slow";

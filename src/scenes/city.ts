@@ -10,7 +10,9 @@
 // Surprise: a plane blinks across the sky. Taps: "♪ mrrp", "♪ coo", a window
 // switches. Gags: the cat slowly pushes a flowerpot off the ledge; a pigeon
 // steals its spot while it stretches; it chases a reflected spot of light.
-// Seasons: snow on the ledge, flowerpots in spring, leaves in autumn.
+// Seasons: snow on the ledge, flowerpots in spring, leaves in autumn. At
+// rest between runs (scenes shown always): the cat pads over to the warm
+// vent and curls up asleep, as when rate-limited.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, rowOf, type AlertSpec } from "../kit/alert";
 import { SNOW, glow, seeded, sprite, type Motion, type Sprite } from "../kit/common";
@@ -104,6 +106,10 @@ const lightUp = (s: State) => {
 
 /** Where the cat sits while waiting: just left of the antenna. */
 const antennaSpot = (s: State) => s.antennaX - SIT_W - 1;
+/** Where the cat sleeps: by the warm vent. */
+const ventSpot = (s: State) => s.ventX + 3;
+/** Curled up by the vent: rate-limited, or resting between runs and there. */
+const asleep = (s: State, k: K) => k.mood.kind === "rate" || (k.resting && (k.reduced || Math.abs(ventSpot(s) - s.x) <= 0.3));
 
 // -- The helper alert --------------------------------------------------------
 
@@ -197,7 +203,7 @@ export const city = defineScene<State, Pigeon>({
     const mk = k.mood.kind;
     if (mk === "working" && k.gagId) {
       // A gag is moving the cat (see the gags below).
-    } else if (mk === "working") {
+    } else if (mk === "working" && !k.resting) {
       s.stretch = Math.max(0, s.stretch - dt);
       if (s.pause > 0) s.pause -= dt;
       else {
@@ -209,9 +215,9 @@ export const city = defineScene<State, Pigeon>({
           if (Math.random() < 0.35) s.stretch = 1.6;   // a good long stretch
         }
       }
-    } else if (mk === "waiting") {   // the cat walks over to the antenna
-      const dx = antennaSpot(s) - s.x;
-      if (Math.abs(dx) > 0.3) { s.dir = dx > 0 ? 1 : -1; s.x += s.dir * Math.min(Math.abs(dx), SPEED.trot * 0.8 * dt); }
+    } else if (mk === "waiting" || k.resting) {   // the cat walks over to the antenna, or pads to the vent
+      const dx = (k.resting ? ventSpot(s) : antennaSpot(s)) - s.x;
+      if (Math.abs(dx) > 0.3) { s.dir = dx > 0 ? 1 : -1; s.x += s.dir * Math.min(Math.abs(dx), SPEED.trot * dt); }
     }
     if (s.flicker && (s.flicker.k += dt / TIME.reaction) >= 1) s.flicker = null;
     // Steam from the vent.
@@ -232,6 +238,7 @@ export const city = defineScene<State, Pigeon>({
     s.steam = [];
     s.plane = null;
     if (k.mood.kind === "waiting") s.x = antennaSpot(s);
+    if (k.resting) s.x = ventSpot(s);
     s.stretch = 0;
     k.crew = k.crew.filter((c) => !c.leaving);
     for (const c of k.crew) c.alpha = 1;
@@ -309,7 +316,7 @@ export const city = defineScene<State, Pigeon>({
     {
       const name = catPose(s, k);
       const pose = CAT[name];
-      const x = mk === "rate" ? s.ventX + 3 : s.x;
+      const x = mk === "rate" ? ventSpot(s) : s.x;
       const hop = k.gagging("light") !== null && name === "pounce" ? -1 : 0;
       const flip = name !== "sit" && name !== "sleep" && s.dir < 0, y = GROUND - pose.length + hop;
       // A soft light edge first, so the cat stands out from the skyline.
@@ -330,6 +337,7 @@ export const city = defineScene<State, Pigeon>({
     const mk = k.mood.kind;
     if (s.flicker || s.plane !== null) return "fast";
     if (k.crew.some((c) => c.leaving || c.alpha < 1)) return "fast";
+    if (k.resting) return asleep(s, k) ? "slow" : "fast";   // asleep: the steam rises
     if (mk === "working") return "fast";
     // Steam rises and the antenna blinks: gentle.
     return mk === "idle" ? "still" : "slow";
@@ -398,7 +406,8 @@ function spotX(s: State, k: K, p: number): number {
 /** What the cat is doing now. */
 function catPose(s: State, k: K): CatPose {
   const mk = k.mood.kind, t = k.t;
-  if (mk === "rate") return "sleep";
+  if (asleep(s, k)) return "sleep";
+  if (k.resting) return Math.floor(t / TIME.beat) % 2 ? "walk2" : "walk1";   // padding over to the vent
   if (mk === "waiting") return k.reduced || Math.abs(antennaSpot(s) - s.x) <= 0.3 ? "sit" : Math.floor(t / TIME.beat) % 2 ? "walk2" : "walk1";
   if (k.gagging("pot") !== null) return "walk1";
   const pigeon = k.gagging("pigeon");

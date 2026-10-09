@@ -11,7 +11,9 @@
 // dusk. Surprise: a ship passes on the horizon. Gags: a gull steals the
 // keeper's sandwich; a wave splashes the keeper; a broom sweep sends dust into
 // a passing gull. Taps: the keeper waves, "♪ caw", a splash. Seasons: snow on
-// the rocks in winter, a far sail in summer.
+// the rocks in winter, a far sail in summer. At rest between runs (scenes
+// shown always): the keeper sits down on the gallery step and watches the
+// sea, while the lamp keeps turning.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, rowOf, type AlertSpec } from "../kit/alert";
 import { SNOW, glow, seeded, sprite, type Motion, type Sprite } from "../kit/common";
@@ -47,6 +49,8 @@ const KEEPER = {
   sweep2: [".qqq.", "..f..", ".cccc", "b.ccc", "b.j.j"],
   shake: ["qqq.", "cf..", ".ccc", ".ccc", ".j.j"],
   shake2: [".qqq", "..fc", "ccc.", "ccc.", "j.j."],
+  /** Sitting on the gallery step, legs out, watching the sea. */
+  sit: ["qqq.", ".f..", "ccc.", "cjjj"],
 } satisfies Record<string, Sprite>;
 type KeeperPose = keyof typeof KEEPER;
 const SANDWICH = "#d9c28a";
@@ -195,7 +199,7 @@ export const lighthouse = defineScene<State, Gull>({
       c.come = Math.min(1, c.come + dt / 2);
     }
     if (s.ship !== null && ((s.ship += dt / 16) >= 1 || mk !== "working")) s.ship = null;
-    if ((mk === "working" || mk === "idle") && !k.gagId && (s.keeper.left -= dt) <= 0) nextAct(s);
+    if ((mk === "working" || mk === "idle") && !k.resting && !k.gagId && (s.keeper.left -= dt) <= 0) nextAct(s);
   },
 
   settle(s, k) {
@@ -262,7 +266,7 @@ export const lighthouse = defineScene<State, Gull>({
     // The keeper on the gallery, or inside while resting.
     const kx = keeperX(s), ky = GALLERY - 5;
     const pose = keeperPose(s, k);
-    if (pose) k.blit(paint(KEEPER[pose], theme), kx - 1, ky - 1);
+    if (pose) k.blit(paint(KEEPER[pose], theme), kx - 1, ky - 1 + (pose === "sit" ? 1 : 0));
     // Waiting on you: the keeper holds out a lantern, the amber signal.
     if (mk === "waiting") k.signal(kx - 2, GALLERY - 3);
 
@@ -309,6 +313,7 @@ export const lighthouse = defineScene<State, Gull>({
     if (s.crash !== null || s.flash !== null || s.ship !== null) return "fast";
     if (k.crew.some((c) => c.leaving || c.come < 1 || c.kind === "working")) return mk === "idle" && !k.crew.some((c) => c.leaving) ? "still" : "fast";
     if (mk === "rate") return s.fog < 1 ? "fast" : "slow";
+    if (k.resting) return "slow";   // the lamp turns and the waves roll
     // The lamp turns and the waves roll: gentle.
     return mk === "idle" ? "still" : "slow";
   },
@@ -374,6 +379,7 @@ export const lighthouse = defineScene<State, Gull>({
 function keeperPose(s: State, k: K): KeeperPose | null {
   const mk = k.mood.kind, t = k.t;
   if (mk === "rate") return null;
+  if (k.resting) return "sit";
   if (mk === "waiting") return "front";
   if (mk === "error") return "front";
   const swing = !k.reduced && Math.floor(t * 4) % 2 === 0;

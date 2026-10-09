@@ -9,7 +9,9 @@
 // over. Taps: the kite loops, "♪ whee". Seasons: blossom petals, summer
 // clouds, autumn leaves, and snow, all blowing on the breeze. Gags: the kite
 // snags in the tree and the kid tugs and tugs; a bird chases the kite; a
-// gust lifts the kid an inch off the ground.
+// gust lifts the kid an inch off the ground. At rest between runs (scenes
+// shown always): the kite comes down to the grass and the child sits by it,
+// as when rate-limited; it goes back up when the next run starts.
 import { defineScene, type HitTarget, type Kit } from "../kit/engine";
 import { ALERT_GROUND as AG, rowOf, type AlertSpec } from "../kit/alert";
 import { SNOW, glow, seeded, sprite, type Motion, type Sprite } from "../kit/common";
@@ -126,7 +128,7 @@ export const kites = defineScene<State, Kite>({
     s.homeY = 2;
     s.treeX = Math.floor(W * (k.narrow ? 0.37 : 0.33));
   },
-  mood(s, k) { if (k.mood.kind !== "rate") s.down = 0; },
+  mood(s, k, was) { if (was === "rate" && k.mood.kind !== "rate") s.down = 0; },
   // A new run: the kite already up, mid-loop.
   start(s, k) { s.down = 0; if (k.mood.kind === "working") loopIt(s); },
 
@@ -171,7 +173,8 @@ export const kites = defineScene<State, Kite>({
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (s.loop !== null && (s.loop += dt) > LOOP_SECONDS) s.loop = null;
-    s.down = mk === "rate" ? Math.min(1, s.down + dt / 2.5) : 0;
+    const grounded = mk === "rate" || k.resting;
+    s.down = grounded ? Math.min(1, s.down + dt / 2.5) : Math.max(0, s.down - dt / 1.5);
     for (const c of k.crew) {
       if (c.leaving) { c.y += dt * 3; c.alpha -= dt / 1.5; continue; }
       c.rise = Math.min(1, c.rise + dt / 2);
@@ -182,7 +185,7 @@ export const kites = defineScene<State, Kite>({
   settle(s, k) {
     s.loop = null;
     s.dragon = null;
-    s.down = k.mood.kind === "rate" ? 1 : 0;
+    s.down = k.mood.kind === "rate" || k.resting ? 1 : 0;
     k.crew = k.crew.filter((c) => !c.leaving);
     for (const c of k.crew) c.rise = 1;
   },
@@ -230,7 +233,7 @@ export const kites = defineScene<State, Kite>({
     }
 
     // The child, holding the string.
-    const pose = mk === "rate" ? KID.sit : mk === "waiting" ? KID.front : KID.stand;
+    const pose = mk === "rate" || (k.resting && s.down >= 1) ? KID.sit : mk === "waiting" ? KID.front : KID.stand;
     const snag = k.gagging("snag"), gust = k.gagging("gust");
     const tug = snag !== null && snag > 0.25 && snag < 0.8 && Math.floor(k.t * 4) % 2 ? -1 : 0;   // leaning back, tugging
     const lift = gust !== null ? Math.round(Math.sin(Math.PI * gust) * 2) : 0;
@@ -286,8 +289,9 @@ export const kites = defineScene<State, Kite>({
     const mk = k.mood.kind;
     if (s.loop !== null || s.dragon !== null) return "fast";
     if (k.crew.some((c) => c.leaving || c.rise < 1)) return "fast";
+    if (mk === "rate" || k.resting) return s.down < 1 ? "fast" : k.season === "summer" ? "still" : "slow";
+    if (s.down > 0) return "fast";   // the kite going back up
     if (mk === "working") return "fast";
-    if (mk === "rate") return s.down < 1 ? "fast" : "still";
     return mk === "idle" ? "still" : "slow";
   },
 

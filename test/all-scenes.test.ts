@@ -23,6 +23,23 @@ for (const scene of [...SCENES, snail]) {
       expect(s.crew.length + s.crewExtra).toBe(12);
     });
 
+    it("rests between runs when shown always: no gags, a gentle frame rate, then back to work", () => {
+      const s = make(scene);
+      s.layout(900);
+      s.setMood(mood("working"));
+      advance(s, 3);
+      s.setMood({ ...mood("working"), turnStartedAt: null, resting: true });
+      advance(s, 30);   // long enough for anyone to walk to their resting place on a wide strip
+      expect(s.gag()).toBe(false);
+      expect(["slow", "still"]).toContain(s.motion());
+      s.setMood(mood("working"));
+      advance(s, 4);
+      expect(["fast", "slow"]).toContain(s.motion());
+      const focus = s.focusX();
+      expect(focus).toBeGreaterThanOrEqual(0);
+      expect(focus).toBeLessThanOrEqual(900);
+    });
+
     for (const width of [360, 900]) {
       it(`plays every moment at ${width} CSS px`, () => {
         const s = make(scene);

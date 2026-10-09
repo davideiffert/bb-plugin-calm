@@ -139,6 +139,8 @@ export interface Kit<S, C> {
   readonly narrow: boolean;
   readonly t: number;
   readonly mood: Mood;
+  /** Shown always and idle between runs: the mood reads "working" so the scene plays on, but nothing is happening. */
+  readonly resting: boolean;
   readonly scale: number;
   readonly season: Season;
   readonly reduced: boolean;
@@ -228,15 +230,20 @@ class KitScene<S, C> implements SceneInstance, Kit<S, C> {
 
   get theme() { return this.view.theme; }
   get narrow() { return this.W > 0 && this.W < 130; }
+  get resting() { return this.mood.kind === "working" && this.mood.resting === true; }
   /** The scene's own state, for tests and tools. */
   get state(): S { return this.s; }
 
   // -- The mood and runs ----------------------------------------------------
 
   setMood(mood: Mood) {
-    const was = this.mood.kind;
+    const was = this.mood.kind, rested = this.resting;
     this.mood = mood;
-    if (mood.kind === was) return;
+    if (mood.kind === was) {
+      // Working to resting, or back: the same scene, told so it can change its picture.
+      if (this.resting !== rested) { if (this.resting) this.endGag(); this.spec.mood?.(this.s, this, was); }
+      return;
+    }
     if (mood.kind !== "working") this.endGag();   // a gag never plays over waiting, an error, or a rest
     // A new run starts mid-scene; coming back from waiting on you is the same run.
     if (mood.kind === "working" && was !== "waiting") this.startPending = true;
@@ -287,7 +294,7 @@ class KitScene<S, C> implements SceneInstance, Kit<S, C> {
   // -- Steps, surprises, taps ---------------------------------------------
 
   step() {
-    if (this.mood.kind !== "working" || this.t - this.lastStep < STEP_DEBOUNCE || !this.W) return;
+    if (this.mood.kind !== "working" || this.resting || this.t - this.lastStep < STEP_DEBOUNCE || !this.W) return;
     if (this.spec.step(this.s, this)) this.lastStep = this.t;
   }
   stepped() { this.lastStep = this.t; }
@@ -302,7 +309,7 @@ class KitScene<S, C> implements SceneInstance, Kit<S, C> {
   gagging(id: string) { return this.playing?.gag.id === id ? Math.min(1, this.playing.t / this.playing.gag.seconds) : null; }
   gag(id?: string): boolean {
     const list = this.spec.gags ?? [];
-    if (!this.W || this.mood.kind !== "working" || this.reduced || this.playing || list.length === 0) return false;
+    if (!this.W || this.mood.kind !== "working" || this.resting || this.reduced || this.playing || list.length === 0) return false;
     if (id !== undefined) {
       const i = list.findIndex((g) => g.id === id);
       if (i < 0 || list[i].ready?.(this.s, this) === false) return false;
@@ -366,8 +373,9 @@ class KitScene<S, C> implements SceneInstance, Kit<S, C> {
     this.spec.update(this.s, this, dt);
     this.crew = this.crew.filter((c) => c.alpha > 0 || !c.leaving);
     const surprising = this.spec.surprise.active(this.s);
-    if (this.surprises.tick(dt, this.mood.kind, this.reduced, surprising || this.playing !== null)) this.surprise();
-    if (this.gags.tick(dt, this.mood.kind, this.reduced, surprising || this.playing !== null)) this.gag();
+    const kind = this.resting ? "idle" : this.mood.kind;   // at rest, the clocks for surprises and gags stand still
+    if (this.surprises.tick(dt, kind, this.reduced, surprising || this.playing !== null)) this.surprise();
+    if (this.gags.tick(dt, kind, this.reduced, surprising || this.playing !== null)) this.gag();
   }
 
   motion(): Motion {
@@ -417,7 +425,8 @@ class KitScene<S, C> implements SceneInstance, Kit<S, C> {
     if (color) this.ctx.fillStyle = color;
     this.ctx.fillRect(this.px(x), this.px(y), this.s3, this.s3);
   }
-  evening() { return evening(this.mood, this.view); }
+  /** Full daylight until the first frame says otherwise (a scene may ask before it has drawn). */
+  evening() { return this.view ? evening(this.mood, this.view) : 0; }
   marker(kind: string, x: number, y: number) { this.markers.push([kind, x, y]); }
   signal(x: number, y: number) { this.signals.push([x, y]); }
   private paintSignal(x: number, y: number) {

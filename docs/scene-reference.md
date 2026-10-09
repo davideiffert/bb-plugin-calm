@@ -11,7 +11,7 @@ Sixteen scenes, each starting mid-action, because most runs are short.
 | Waiting on you | Everything stops and the dog sits facing you, an amber tag by it. | The anchor drops and the lantern glows amber. | The stars hold still; the owl faces you, an amber star beside it. |
 | Rate-limited | The flock is penned and the gate shuts. | Anchored. | Lavender clouds roll in. |
 | Error | A rain cloud until the next run. | A rain cloud. | A rain cloud over the owl. |
-| Done | The strip closes right away. With **Show scenes** set to **Always**, it stays and plays on. | Same. | Same. |
+| Done | The strip closes right away. With **Show scenes** set to **Always**, it stays up at rest: the flock stands and grazes, the dog lies down. | Same; the boat drops anchor and furls its sail, bobbing on the swell. | Same; the owl dozes and the stars twinkle slowly. |
 | Your crew | Each active child thread is a sheep with a colored ear tag. | A small boat in the fleet. | A bright star in its color. |
 | A child finishes | It walks into the pen and fades. | It sails back to harbor. | It fades out. |
 | Tap | A sheep says "♪ baa" and hops. | A boat rings a small bell. | A star twinkles. |
@@ -26,6 +26,7 @@ Sixteen scenes, each starting mid-action, because most runs are short.
 | Waiting on you | Tethered, its pilot light glowing amber. | The duck faces you; an amber light glows by it, a dragonfly overhead. | Stopped at an amber signal, headlamp off. | The gardener faces you, holding an amber lantern. |
 | Rate-limited | Landed, the envelope down. | Asleep, head tucked under a wing. | Stopped at a red signal, no steam. | A nap on the bench. |
 | Error | A rain cloud. | A rain cloud. | A rain cloud. | A rain cloud. |
+| Done | Closes, or at rest (shown always): it settles to the ground, envelope up, burner off; it lifts off again on the next run. | Closes, or at rest: asleep where it is, head under a wing. | Closes, or at rest: eases to a stop in view, headlamp off, a wisp of steam now and then. | Closes, or at rest: a nap on the bench. |
 | Your crew | Small balloons in each helper's color. | Ducklings in a line, each with a ribbon. | A car per helper, in its color. | Bees in each helper's color. |
 | A child finishes | It rises away and fades. | It paddles off to the bank. | Its car uncouples and fades. | It flies off. |
 | Tap | A burner whoosh; far balloons bob. | "♪ quack", "♪ peep", "♪ ribbit". | "♪ toot", "♪ moo". | A wave, a swaying flower, "♪ bzz". |
@@ -39,6 +40,7 @@ Sixteen scenes, each starting mid-action, because most runs are short.
 | Long run | The firelight grows; stars come out. | The light rays fade; plankton glows. | Windows and the lamp light up. | Alpenglow turns the peaks pink. |
 | Waiting on you | The camper faces you, holding up an amber lantern. | The turtle faces you; a jellyfish with an amber heart floats by. | The child runs to the clock tower, whose window glows amber. | The hiker walks to the trail marker, whose blaze glows amber. |
 | Rate-limited | Embers, and asleep in the tent. | Resting on the sand. | Everyone indoors. | A tent pitched, the hiker inside. |
+| Done | Closes, or at rest (shown always): embers, the camper asleep in the tent. | Closes, or at rest: settled on the sand, eyes closed. | Closes, or at rest: everyone indoors, one window lit, snow still falling. | Closes, or at rest: the hiker sits on a boulder by the trail, pack off. |
 | Your crew | Friends round the fire in colored beanies. | Small fish in each helper's color. | Snowmen in colored scarves. | Goats with colored bells. |
 | Tap | "♪ toasty", "♪ crackle", "♪ hi". | "♪ blub", a fish flips, the clam opens. | "♪ wheee", a scarf flutters, a chimney puffs. | "♪ yodel", "♪ maa", "♪ eek". |
 | Rare surprise | A raccoon peeks out. | A whale shark passes far behind. | A sleigh crosses the sky. | An eagle soars over. |
@@ -51,6 +53,7 @@ Sixteen scenes, each starting mid-action, because most runs are short.
 | Long run | The kite glows cream. | The sun sinks behind the buttes. | The city lights come on. | A short, soft beam turns. | The planet's night side lights up. |
 | Waiting on you | The kite holds, an amber light on it; the child faces you. | It runs to a saguaro, whose flower glows amber. | The cat sits by the antenna, whose light glows amber. | The keeper faces you, holding out an amber lantern; the lamp stops turning. | The astronaut faces you; the helmet lamp glows amber. |
 | Rate-limited | The kite down on the grass. | Resting in a saguaro's shade. | Asleep by the warm vent. | Fog banks roll in. | Back inside the capsule. |
+| Done | Closes, or at rest (shown always): the kite down on the grass, the child sitting by it; it goes back up on the next run. | Closes, or at rest: trots to the shade and settles. | Closes, or at rest: pads to the warm vent and curls up asleep. | Closes, or at rest: the keeper sits on the gallery step; the lamp keeps turning. | Closes, or at rest: back inside the capsule, window lit, stars twinkling slowly. |
 | Your crew | More kites in each helper's color. | Quail with colored topknots. | Pigeons with colored wing patches. | Gulls with colored wing tags. | Satellites with colored panels. |
 | Tap | The kite loops, "♪ whee". | "♪ meep meep", "♪ ka-kow". | "♪ mrrp", "♪ coo", a window switches. | The lamp flashes, "♪ caw". | A wave, "♪ beep". |
 | Rare surprise | A dragon kite drifts over. | A coyote trots by. | A plane blinks across. | A ship on the horizon. | A flying saucer zips past. |
