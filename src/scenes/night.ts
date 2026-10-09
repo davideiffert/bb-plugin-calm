@@ -216,6 +216,27 @@ export const night = defineScene<State, CrewStar>({
   // The owl is the lead: its cloud.
   errorCloudX: (s) => s.owlPine - 4,
 
+  // Below the hills: the dark of the hillside, and a few stars reflected in a still tarn.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, t = k.t, dark = k.theme === "dark";
+    const rows = Math.round(b.H * b.level);
+    for (let y = 0; y < Math.min(rows, 6); y++) {
+      v.globalAlpha = (dark ? 0.5 : 0.35) * (1 - y / 6);
+      v.fillStyle = P.hill;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    const rnd = seeded(b.W * 3 + 11);
+    v.fillStyle = P.star;
+    for (let i = 0; i < b.W / 9; i++) {
+      const x = rnd() * b.W, y = 4 + rnd() * Math.max(1, b.H - 4), ph = rnd() * 6.3;
+      if (y >= rows) continue;
+      v.globalAlpha = (dark ? 0.6 : 0.5) * b.level * (k.reduced ? 0.8 : 0.5 + 0.5 * Math.sin(t * 0.7 + ph));
+      b.dot(x, y);
+    }
+    v.globalAlpha = 1;
+  },
+
   // Always night here: the faint night glow over the hills, pink-tinted in spring.
   sky(_s, k) {
     if (k.season === "spring" && skyGlow(1, k.view.theme)) skyLayer([330, 70, 78, 0.05]);

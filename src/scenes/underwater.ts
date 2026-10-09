@@ -196,6 +196,26 @@ export const underwater = defineScene<State, Fish>({
 
   errorCloudX: (s) => s.x,
 
+  // Below the sand: deeper water and bubbles rising past the text.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, t = k.t, dark = k.theme === "dark";
+    const rows = Math.round(b.H * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.18 : 0.12) + (dark ? 0.14 : 0.1) * (y / Math.max(1, b.H));
+      v.fillStyle = P.surface!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.5 : 0.55) * b.level;
+    v.fillStyle = P.bubble!;
+    for (let i = 0; i < b.W / 20; i++) {
+      const x = (i * 41 + 7) % b.W + Math.sin(t * 2 + i) * 0.8;
+      const y = rows - ((t * (2 + (i % 3)) + i * 9) % (rows + 2));
+      if (y >= 0 && y < rows) b.dot(x, y);
+    }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (s.clam !== null && (s.clam += dt) > 1.6) s.clam = null;

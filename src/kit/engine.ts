@@ -19,7 +19,7 @@ import { crewColor, type CrewMember } from "../crew";
 import type { Mood, MoodKind } from "../mood";
 import {
   GagClock, LayerCache, SCALE, STEP_DEBOUNCE, SurpriseClock, crewMarker, evening, floatNote, glow, overflowLabel, rainCloud, rateSign,
-  seasonOf, seeded, skyTint, type Motion, type Season,
+  seasonOf, seeded, skyGlow, skyTint, type Motion, type Season,
 } from "./common";
 import { AMBER, TIME } from "./style";
 import type { AlertSpec } from "./alert";
@@ -119,6 +119,12 @@ export interface SceneSpec<S, C = object> {
 
   /** The sky glow. Default: the time of day's glow. */
   sky?(s: S, k: Kit<S, C>): void;
+  /**
+   * What lies below the ground line, painted faintly behind the prompt box's
+   * text when the scene spills into it (experimental). `b.level` is how far
+   * in the spill is, 0 to 1. Default: a wash of the sky's glow.
+   */
+  below?(s: S, k: Kit<S, C>, b: Below): void;
   /** Advance the scene's own motion by `dt` seconds (not called with reduced motion). */
   update(s: S, k: Kit<S, C>, dt: number): void;
   /** Reduced motion: jump straight to the still picture for the mood. */
@@ -130,6 +136,21 @@ export interface SceneSpec<S, C = object> {
 
   /** The helper alert: this scene's half-height mini scene. */
   alert: AlertSpec;
+}
+
+/** The prompt box's layer, for a scene's `below` hook: its own canvas, in art pixels. */
+export interface Below {
+  v: CanvasRenderingContext2D;
+  /** The layer's size in art px. */
+  W: number;
+  H: number;
+  /** Canvas px per art px. */
+  s3: number;
+  /** How far in the spill is, 0 to 1. */
+  level: number;
+  px(n: number): number;
+  dot(x: number, y: number, color?: string): void;
+  blit(c: HTMLCanvasElement, x: number, y: number): void;
 }
 
 /** What a scene's hooks can read and use. */
@@ -417,6 +438,39 @@ class KitScene<S, C> implements SceneInstance, Kit<S, C> {
     const k = this.mood.kind;
     if (k === "error") rainCloud(ctx, view, this.spec.errorCloudX(this.s, this), this.t);
     if (k === "rate") rateSign(ctx, view, this.mood);
+  }
+
+  /**
+   * Paint the prompt box's layer (experimental): the scene's `below`, or a
+   * wash of the sky's glow. Nothing before the first frame has set the view.
+   */
+  drawBelow(ctx: CanvasRenderingContext2D, cssWidth: number, cssHeight: number, level: number) {
+    if (!this.view) return;
+    const s3 = this.scale;
+    const W = Math.max(1, Math.ceil(cssWidth / s3)), H = Math.max(1, Math.ceil(cssHeight / s3));
+    if (ctx.canvas.width !== W * s3 || ctx.canvas.height !== H * s3) { ctx.canvas.width = W * s3; ctx.canvas.height = H * s3; }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = 1;
+    const px = (n: number) => Math.round(n * s3);
+    const b: Below = {
+      v: ctx, W, H, s3, level, px,
+      dot: (x, y, color) => { if (color) ctx.fillStyle = color; ctx.fillRect(px(x), px(y), s3, s3); },
+      blit: (c, x, y) => ctx.drawImage(c, px(x), px(y), c.width * s3, c.height * s3),
+    };
+    if (this.spec.below) { this.spec.below(this.s, this, b); ctx.globalAlpha = 1; return; }
+    // The default: the sky's glow, fading down from the strip.
+    const g = skyGlow(this.evening(), this.view.theme);
+    if (!g) return;
+    const [h, sat, l, a] = g;
+    const rows = Math.min(H, 14);
+    for (let y = 0; y < rows; y++) {
+      ctx.globalAlpha = a * 2.2 * level * (1 - y / rows);
+      ctx.fillStyle = `hsl(${h},${sat}%,${l}%)`;
+      ctx.fillRect(0, px(y), W * s3, s3);
+    }
+    ctx.globalAlpha = 1;
   }
 
   px(n: number) { return Math.round(n * this.s3); }

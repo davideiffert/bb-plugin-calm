@@ -85,9 +85,10 @@ describe("cleanPrefs", () => {
 
   it("defaults to a new scene each run, with every feature on and Still pictures off", () => {
     expect(cleanPrefs(undefined).scene).toBe("each-run");
-    const { still, ...rest } = DEFAULT_FEATURES;
+    const { still, spill, ...rest } = DEFAULT_FEATURES;
     expect(Object.values(rest).every(Boolean)).toBe(true);
     expect(still).toBe(false);   // motion follows the system setting unless you choose stills
+    expect(spill).toBe(false);   // experimental: opt in
   });
 
   it("keeps a feature switched off and ignores unknown ones", () => {

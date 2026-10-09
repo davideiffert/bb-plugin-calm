@@ -221,6 +221,7 @@ const FEATURE_ROWS: [Feature, string, string][] = [
   ["ambient", "Time of day and seasons", "The light follows your clock, and each season adds a touch."],
   ["header", "Thread header control", "A small button in each thread to turn Calm off there or pin a scene."],
   ["still", "Still pictures", "Every scene shows a still picture of its moment, with no motion, whatever your system's motion setting."],
+  ["spill", "Spill into the prompt box (experimental)", "What lies below the scene carries on faintly behind your text: water, stars, grass. Depends on bb's markup; off if it isn't recognized."],
 ];
 
 export function CalmSettings() {

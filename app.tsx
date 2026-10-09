@@ -20,6 +20,7 @@ import { runOnClock } from "./src/clock";
 import { GlowLayer } from "./src/glow";
 import { useReducedMotion } from "./src/motion";
 import { usePrefs, useThreadPrefs } from "./src/use-prefs";
+import { spill } from "./src/spill";
 import { CalmHeaderControl } from "./src/header-control";
 import { CalmSettings } from "./src/settings-section";
 import { ALERT_HEIGHT, HelperAlertRow } from "./src/crew-alert";
@@ -388,6 +389,21 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
   const wake = () => clock.current?.wake();
   // Anything that changes the picture asks for a frame now.
   useEffect(wake, [moodKey, crewKey, tip]);
+
+  // Experimental: the scene spills into the prompt box while it shows, and drains as it closes.
+  const reducedRef = useRef(reduced);
+  reducedRef.current = reduced;
+  useEffect(() => {
+    // The strip's element exists only once mounted, a render after it turns visible.
+    const wrap = wrapRef.current;
+    if (!visible || !mounted || crewOnly || !features.spill || !wrap) return;
+    const drain = spill(wrap, {
+      draw: (ctx, w, h, level) => scene.drawBelow(ctx, w, h, level),
+      isReducedMotion: () => reducedRef.current,
+    });
+    if (!drain) console.info("Calm: the prompt box wasn't found in this bb's markup; the scene can't spill into it.");
+    return drain ?? undefined;
+  }, [visible, mounted, crewOnly, features.spill, scene]);
 
   if (!mounted) return null;
   const ease = reduced ? "none" : `height ${EASE_MS}ms ease, margin-bottom ${EASE_MS}ms ease`;

@@ -255,6 +255,34 @@ export const sea = defineScene<State, Skiff>({
 
   errorCloudX: (s) => s.x + 1,
 
+  // Below the waterline: deeper water, ripples, and a couple of fish behind the text.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, t = k.t, dark = k.theme === "dark";
+    const rows = Math.round(b.H * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.16 : 0.12) + (dark ? 0.14 : 0.1) * (y / Math.max(1, b.H));
+      v.fillStyle = P.water!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.35 : 0.5) * b.level;
+    v.fillStyle = P.ripple!;
+    for (let i = 0; i < b.W / 12; i++) {
+      const x = ((i * 53 + (i % 2 ? 1 : -1) * t * (1.5 + (i % 3))) % b.W + b.W) % b.W;
+      const y = 1 + (i * 7) % Math.max(1, rows);
+      v.fillRect(b.px(x), b.px(y), 3 * b.s3, b.s3);
+    }
+    // Two fish, each on its own slow beat, turning at the edges.
+    v.globalAlpha = (dark ? 0.55 : 0.6) * b.level;
+    for (const [i, sp] of [[0, 5], [1, 3.5]] as const) {
+      const span = b.W + 16, p = ((t * sp + i * span * 0.5) % (2 * span));
+      const dir = p < span ? 1 : -1, x = (p < span ? p : 2 * span - p) - 8;
+      const y = Math.min(rows - 3, 2 + i * 4 + Math.sin(t * 0.8 + i) * 1.2);
+      if (y >= 0) b.blit(sprite(FISH, P, dir < 0), x, y);
+    }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     for (const b of k.crew) {

@@ -188,6 +188,26 @@ export const lighthouse = defineScene<State, Gull>({
 
   errorCloudX: (s) => keeperX(s) - 4,
 
+  // Below the waterline: the sea, with ripples, and the rock's foot under the tower.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, t = k.t, dark = k.theme === "dark";
+    const rows = Math.round(b.H * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.16 : 0.12) + (dark ? 0.14 : 0.1) * (y / Math.max(1, b.H));
+      v.fillStyle = P.water!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.35 : 0.5) * b.level;
+    v.fillStyle = P.ripple!;
+    for (let i = 0; i < b.W / 14; i++) v.fillRect(b.px(((i * 41 + t * (2 + (i % 3))) % b.W + b.W) % b.W), b.px(1 + (i * 5) % Math.max(1, rows)), 2 * b.s3, b.s3);
+    v.globalAlpha = (dark ? 0.3 : 0.25) * b.level;
+    v.fillStyle = P.rock!;
+    const foot = Math.min(rows, 3);
+    for (let y = 0; y < foot; y++) v.fillRect(b.px(s.towerX - 2 - y * 2), b.px(y), (TOWER_W + 4 + y * 4) * b.s3, b.s3);
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (mk === "working" || mk === "idle" || mk === "error") s.turn = (s.turn + dt / 6) % 1;

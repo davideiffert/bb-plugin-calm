@@ -3,7 +3,8 @@
 // progress with a step every few seconds; "Rest" is the strip shown always,
 // resting between runs. "Fast day" runs the clock through a whole day in
 // under a minute, so the evening light, the stars, and the dawn all show.
-// Built into one HTML file by states.mjs.
+// Under each strip sits a mock prompt box, so the experimental spill into it
+// shows here without turning it on in bb. Built into one HTML file by states.mjs.
 //   ?only=sea,night   shows just those scenes
 import { SCENES } from "@calm/scenes/index";
 import { beginFrame, endFrame, type Label, type Hsla } from "@calm/kit/common";
@@ -37,6 +38,8 @@ interface Cell {
   inst: SceneInstance;
   art: HTMLCanvasElement;    // the scene's own pixels
   out: HTMLCanvasElement;    // composed with page color, glow, and labels
+  box: HTMLDivElement;       // a mock prompt box under the strip
+  below: HTMLCanvasElement;  // the spill layer behind its text
   height: number;
   running: boolean;
   run: number;
@@ -98,7 +101,11 @@ function cell(scene: (typeof SCENES)[number]): Cell {
   out.className = "strip";
   const button = document.createElement("button");
   button.className = "toggle";
-  const c: Cell = { inst, art, out, height: scene.height, running: true, run: runs, stepAt: 1.5, button };
+  const box = document.createElement("div"); box.className = "prompt";
+  const below = document.createElement("canvas"); below.className = "below";
+  const text = document.createElement("div"); text.className = "prompt-text"; text.textContent = "Type a message to the agent…";
+  box.append(below, text);
+  const c: Cell = { inst, art, out, box, below, height: scene.height, running: true, run: runs, stepAt: 1.5, button };
   button.onclick = () => setRunning(c, !c.running);
   setRunning(c, true);
   return c;
@@ -126,6 +133,14 @@ style.textContent = `
   .strip { display: block; border-radius: 6px; border: 1px solid #8884; image-rendering: pixelated; }
   .strip[data-state="resting"] { border-color: #b07a2a66; }
   .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .cell { display: flex; flex-direction: column; }
+  .prompt { position: relative; isolation: isolate; height: 54px; margin-top: -1px; border: 1px solid #8884; border-top: 0; border-radius: 0 0 8px 8px; background: #fff; overflow: hidden; }
+  body.dark .prompt { background: #18181b; }
+  .prompt .below { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+  .prompt-text { padding: 10px 14px; color: #999; font-size: 14px; }
+  body.spill-off .prompt { display: none; }
+  body.spill-off .strip { border-radius: 6px; }
+  body:not(.spill-off) .strip { border-radius: 6px 6px 0 0; }
 `;
 document.head.appendChild(style);
 document.title = "Calm: run and rest";
@@ -135,10 +150,11 @@ const h1 = document.createElement("h1"); h1.textContent = "Calm: every scene, ru
 const hint = document.createElement("p"); hint.textContent = "End a run to watch the scene settle; start one to watch it pick up again.";
 const allOn = document.createElement("button"); allOn.textContent = "Start all runs";
 const allOff = document.createElement("button"); allOff.textContent = "End all runs";
+const spillBtn = document.createElement("button"); spillBtn.textContent = "Spill"; spillBtn.title = "The experimental spill into a mock prompt box under each strip"; spillBtn.setAttribute("aria-pressed", "true");
 const themeBtn = document.createElement("button");
 const clockEl = document.createElement("span"); clockEl.className = "clock"; clockEl.textContent = clockText();
 const dayBtn = document.createElement("button"); dayBtn.textContent = "Fast day"; dayBtn.title = `A whole day every ${DAY_SECONDS} seconds`; dayBtn.setAttribute("aria-pressed", "false");
-header.append(h1, hint, allOn, allOff, clockEl, dayBtn, themeBtn);
+header.append(h1, hint, allOn, allOff, spillBtn, clockEl, dayBtn, themeBtn);
 document.body.appendChild(header);
 
 const main = document.createElement("main");
@@ -154,7 +170,9 @@ for (const scene of SCENES.filter((s) => !only || only.includes(s.id))) {
   const tap = document.createElement("button"); tap.textContent = "Tap"; tap.onclick = () => c.inst.poke({ target: "lead", x: c.inst.focusX(), y: 12 });
   acts.append(c.button, step, gag, tap);
   name.appendChild(acts);
-  main.append(name, c.out);
+  const cellEl = document.createElement("div"); cellEl.className = "cell";
+  cellEl.append(c.out, c.box);
+  main.append(name, cellEl);
 }
 document.body.appendChild(main);
 
@@ -165,6 +183,8 @@ function applyTheme() {
 themeBtn.onclick = () => { theme = theme === "dark" ? "light" : "dark"; applyTheme(); };
 allOn.onclick = () => { for (const c of cells) if (!c.running) setRunning(c, true); };
 allOff.onclick = () => { for (const c of cells) if (c.running) setRunning(c, false); };
+let spillOn = true;
+spillBtn.onclick = () => { spillOn = !spillOn; spillBtn.setAttribute("aria-pressed", String(spillOn)); document.body.classList.toggle("spill-off", !spillOn); };
 dayBtn.onclick = () => {
   fastDay = !fastDay;
   dayBtn.setAttribute("aria-pressed", String(fastDay));
@@ -190,6 +210,7 @@ function frame(now: number) {
     beginFrame();
     c.inst.draw(c.art.getContext("2d")!, view);
     compose(c, endFrame());
+    if (spillOn) c.inst.drawBelow(c.below.getContext("2d")!, c.box.clientWidth, c.box.clientHeight, 1);
   }
   requestAnimationFrame(frame);
 }

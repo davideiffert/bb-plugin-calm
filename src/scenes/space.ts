@@ -161,6 +161,22 @@ export const space = defineScene<State, Sat>({
 
   errorCloudX: (s, k) => (inside(s, k) ? s.capX : astroXY(s, k)[0] - 3),
 
+  // Below: more of the same sky, stars twinkling behind the text, and the tether's end.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, t = k.t, dark = k.theme === "dark";
+    const rows = Math.round(b.H * b.level);
+    if (rows <= 0) return;
+    const rnd = seeded(b.W * 29 + 17);
+    v.fillStyle = P.star!;
+    for (let i = 0; i < b.W / 8; i++) {
+      const x = rnd() * b.W, y = rnd() * b.H, ph = rnd() * 6.3;
+      if (y >= rows) continue;
+      v.globalAlpha = (dark ? 0.7 : 0.55) * b.level * (k.reduced ? 0.8 : 0.4 + 0.5 * Math.sin(t * (k.resting ? 0.35 : 0.9) + ph));
+      b.dot(x, y);
+    }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (s.flip !== null && (s.flip += dt) > FLIP_SECONDS) s.flip = null;

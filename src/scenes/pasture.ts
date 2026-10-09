@@ -336,6 +336,26 @@ export const pasture = defineScene<State, Sheep>({
   // The dog is the lead: its cloud.
   errorCloudX: (s) => s.dog.x + 1,
 
+  // Below the meadow: the soil under the turf, with roots and a few pebbles.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, dark = k.theme === "dark";
+    const rows = Math.round(Math.min(b.H, 9) * b.level);
+    const soil = dark ? "#5a4636" : "#b8936a";
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.4 : 0.3) * (1 - y / 9);
+      v.fillStyle = soil;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.5 : 0.45) * b.level;
+    v.fillStyle = P.grass!;
+    for (let x = 2; x < b.W; x += 23) { const i = ((x * 37) % (b.W - 6)) + 2; b.dot(i + 1, 0); if (rows > 2) b.dot(i + (x % 2 ? 1 : 2), 1 + (x % 3)); }
+    v.globalAlpha = (dark ? 0.35 : 0.3) * b.level;
+    v.fillStyle = P.f!;
+    for (let x = 9; x < b.W; x += 31) if (rows > 4) { b.dot((x * 7) % b.W, 3 + (x % 4)); }
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind, f = s.fenceX;
     if (mk === "working" && !k.resting) {

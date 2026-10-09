@@ -230,6 +230,28 @@ export const pond = defineScene<State, Duckling>({
 
   errorCloudX: (s) => s.x - 1,
 
+  // Below the surface: still water, drifting ripples, and the reeds' reflections.
+  below(s, k, b) {
+    const P = PALETTES[k.theme], v = b.v, t = k.t, dark = k.theme === "dark";
+    const rows = Math.round(b.H * b.level);
+    for (let y = 0; y < rows; y++) {
+      v.globalAlpha = (dark ? 0.15 : 0.1) + (dark ? 0.12 : 0.08) * (y / Math.max(1, b.H));
+      v.fillStyle = P.water!;
+      v.fillRect(0, b.px(y), b.W * b.s3, b.s3);
+    }
+    if (rows <= 0) return;
+    v.globalAlpha = (dark ? 0.3 : 0.45) * b.level;
+    v.fillStyle = P.ripple!;
+    for (let i = 0; i < b.W / 16; i++) {
+      const x = ((i * 47 + (i % 2 ? 1 : -1) * t * 1.2) % b.W + b.W) % b.W;
+      v.fillRect(b.px(x), b.px(1 + (i * 5) % Math.max(1, rows)), 2 * b.s3, b.s3);
+    }
+    v.globalAlpha = (dark ? 0.25 : 0.3) * b.level;
+    v.fillStyle = P.r!;
+    for (const x of s.reeds) for (let y = 0; y < Math.min(rows, 4); y++) b.dot(x + (y % 2), y);
+    v.globalAlpha = 1;
+  },
+
   update(s, k, dt) {
     const mk = k.mood.kind;
     if (mk === "working" && !k.resting && k.gagId !== "dip" && k.gagId !== "cross") {
