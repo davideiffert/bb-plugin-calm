@@ -57,7 +57,7 @@ When your agent hands work to child threads, they join the scene as helpers: she
 
 Open **Plugins → Installed plugins → Calm**.
 
-![Calm's scene chooser and feature switches.](assets/launch/settings.png)
+![Calm's settings: the Show scenes choice, the scene chooser and feature switches.](assets/launch/settings.png)
 
 Set **Show scenes** to **Always** to keep the scene up between runs, playing just as it does during work. With a new scene each run, it moves to the next scene in the mix every 3 minutes while the agent is idle, never during a run.
 
