@@ -5,7 +5,7 @@
 import { act } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
-import { SCENES } from "../src/scenes";
+import { SCENES, sceneFor } from "../src/scenes";
 import { DEFAULT_PREFS, type Prefs, type SceneId, type ThreadPrefs } from "../src/settings";
 import { IDLE_TURN_MS, everyVisible } from "../src/idle-turns";
 import type { Mood } from "../src/mood";
@@ -31,13 +31,13 @@ const working: Mood = { kind: "working", turnStartedAt: now - 65_000, resetsAt: 
 const ALWAYS: Prefs = { ...DEFAULT_PREFS, show: "always" };
 
 let threads = 0;
-function strip(opts: { mood: Mood; prefs?: Prefs; thread?: ThreadPrefs; isRunning?: boolean }) {
+function strip(opts: { mood: Mood; prefs?: Prefs; thread?: ThreadPrefs; isRunning?: boolean; state?: () => unknown }) {
   const threadId = `always-${++threads}`;
   const slot = renderSlot(banner as never, {} as never, {
     rpc: {
       prefs_get: () => opts.prefs ?? DEFAULT_PREFS,
       thread_prefs_get: () => opts.thread ?? { off: false, scene: null },
-      state_get: () => ({ mood: opts.mood, steps: 0, crew: [] }),
+      state_get: opts.state ?? (() => ({ mood: opts.mood, steps: 0, crew: [] })),
       watch: () => ({ steps: 0 }),
       failure_dismiss: () => ({ ok: true }),
     } as never,
@@ -45,7 +45,7 @@ function strip(opts: { mood: Mood; prefs?: Prefs; thread?: ThreadPrefs; isRunnin
   });
   const scene = () => (slot.container.querySelector("[data-scene]") as HTMLElement | null)?.dataset.scene ?? null;
   const mood = (m: Mood) => slot.emitRealtime("mood", { threadId, mood: m });
-  return { slot, scene, mood };
+  return { slot, scene, mood, threadId };
 }
 const flush = () => act(async () => { await vi.advanceTimersByTimeAsync(0); });
 const wait = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
@@ -189,6 +189,28 @@ describe("showing scenes always", () => {
       expect(s.scene()).toBe(first);
       s.slot.lifecycle.unmount();
     }
+  });
+
+  it("waits for the project before showing one scene per project", async () => {
+    fake();
+    let answer: (s: unknown) => void = () => {};
+    const s = strip({ mood: idle, prefs: { ...ALWAYS, scene: "each-project" }, state: () => new Promise((r) => { answer = r; }) });
+    // A project whose scene differs from the thread's own, so a swap would show.
+    const own = sceneFor(s.threadId, "each-thread").id;
+    const projectId = Array.from({ length: 50 }, (_, i) => `prj_${i}`).find((p) => sceneFor(s.threadId, "each-project", 0, [], p).id !== own)!;
+    const shown: string[] = [];
+    new MutationObserver(() => { const id = s.scene(); if (id && shown.at(-1) !== id) shown.push(id); })
+      .observe(s.slot.container, { subtree: true, childList: true, attributes: true });
+    await flush();
+    expect(s.scene()).toBeNull();
+    await act(async () => { answer({ mood: idle, steps: 0, crew: [], projectId }); await vi.advanceTimersByTimeAsync(0); });
+    expect(shown).toEqual([sceneFor(s.threadId, "each-project", 0, [], projectId).id]);
+    s.slot.lifecycle.unmount();
+    // If bb gives no project, the thread's own scene shows rather than nothing.
+    const t = strip({ mood: idle, prefs: { ...ALWAYS, scene: "each-project" }, state: () => ({ mood: idle, steps: 0, crew: [], projectId: null }) });
+    await flush();
+    expect(t.scene()).toBe(sceneFor(t.threadId, "each-thread").id);
+    t.slot.lifecycle.unmount();
   });
 
   it("does not change scene while the page is hidden", async () => {

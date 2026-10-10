@@ -4,7 +4,8 @@
 
 - New **One scene per project** choice beside **One scene per thread**. Each
   project draws one scene from the mix, and every thread in that project shows
-  it. The strip learns the project from the thread's record on open.
+  it. The strip learns the project from the thread's record on open, and
+  waits for it before showing a scene.
 
 ## 1.2.0 (2026-10-08)
 
