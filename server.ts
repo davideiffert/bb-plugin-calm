@@ -49,7 +49,7 @@ const threadIdSchema = z.string().min(1).max(200);
 export const rpcContract = defineRpcContract({
   state_get: {
     input: z.object({ threadId: z.string().min(1).max(200) }),
-    output: z.object({ mood: moodSchema, steps: z.number(), crew: crewSchema }),
+    output: z.object({ mood: moodSchema, steps: z.number(), crew: crewSchema, projectId: z.string().nullable().optional() }),
   },
   /** An open strip says it's still watching, every few minutes. */
   watch: { input: z.object({ threadId: z.string().min(1).max(200) }), output: z.object({ steps: z.number() }) },
@@ -73,7 +73,7 @@ export type MoodSignal = { threadId: string; mood: Mood };
 export type StepSignal = { threadId: string; steps: number };
 export type CrewSignal = { threadId: string; crew: CrewMember[] };
 
-interface ThreadFacts { id: string; status: string; parentThreadId: string | null; title: string | null; titleFallback: string | null; archivedAt?: number | null; updatedAt?: number }
+interface ThreadFacts { id: string; status: string; projectId?: string; parentThreadId: string | null; title: string | null; titleFallback: string | null; archivedAt?: number | null; updatedAt?: number }
 
 export default async function plugin(bb: BbPluginApi) {
   // The scene and evening choices, set from Calm's settings section.
@@ -133,6 +133,8 @@ export default async function plugin(bb: BbPluginApi) {
   const parentOf = new Map<string, string>();
   const childrenOf = new Map<string, Set<string>>();
   const titles = new Map<string, string>();
+  /** Each thread's project, for "one scene per project". */
+  const projects = new Map<string, string>();
   const seededCrew = new Set<string>();        // parents whose children were listed once
   // Steps are counted only for threads with a strip open. A strip renews its
   // watch every few minutes; a watch lapses after WATCH_MS without one.
@@ -157,9 +159,10 @@ export default async function plugin(bb: BbPluginApi) {
   /** When a failed thread failed, as bb records it, so a rebuilt failure keeps its time. */
   const failedAt = (t: ThreadFacts) => (typeof t.updatedAt === "number" && t.updatedAt > 0 ? Math.min(t.updatedAt, Date.now()) : Date.now());
 
-  /** Remember a thread's parent and title from any thread record bb hands us. */
+  /** Remember a thread's parent, project, and title from any thread record bb hands us. */
   function note(t: ThreadFacts) {
     titles.set(t.id, (t.title ?? t.titleFallback ?? "Child thread").slice(0, 80));
+    if (typeof t.projectId === "string" && t.projectId) projects.set(t.id, t.projectId);
     if (t.parentThreadId && !t.archivedAt) {
       parentOf.set(t.id, t.parentThreadId);
       let kids = childrenOf.get(t.parentThreadId);
@@ -172,7 +175,7 @@ export default async function plugin(bb: BbPluginApi) {
     const parent = parentOf.get(id);
     gens.delete(id); gens.set(id, ++forgetTick);
     while (gens.size > 5000) gens.delete(gens.keys().next().value!);
-    moods.delete(id); steps.delete(id); lastSeq.delete(id); parentOf.delete(id); titles.delete(id);
+    moods.delete(id); steps.delete(id); lastSeq.delete(id); parentOf.delete(id); titles.delete(id); projects.delete(id);
     watched.delete(id); latestSeq.delete(id); lastCount.delete(id); revs.delete(id);
     childrenOf.delete(id); seededCrew.delete(id);
     if (threadPrefs.delete(id)) void saveThreadPrefs();
@@ -450,6 +453,14 @@ export default async function plugin(bb: BbPluginApi) {
     if (status === "error") return nextMood(base, { type: "failed" }, failedSince);
     return { ...IDLE, run: runs.get(id) ?? 0 };
   }
+  /** The thread's project, for "one scene per project": from memory, else one read. */
+  async function projectOf(threadId: string): Promise<string | null> {
+    if (!projects.has(threadId)) {
+      try { note(await sdk("threads.get", () => bb.sdk.threads.get({ threadId }))); }
+      catch (e) { bb.log.warn(`project lookup failed: ${e instanceof Error ? e.message : String(e)}`); }
+    }
+    return projects.get(threadId) ?? null;
+  }
   async function reconcile(threadId: string): Promise<Mood> {
     const g = gen(threadId);
     const thread = await sdk("threads.get", () => bb.sdk.threads.get({ threadId }));
@@ -502,8 +513,9 @@ export default async function plugin(bb: BbPluginApi) {
       dismissFailure(threadId);   // you opened this thread: if it is a failed helper, its alert is done
       await seedCrew(threadId).catch((e) => bb.log.warn(`crew lookup failed: ${e instanceof Error ? e.message : String(e)}`));
       if (!threadPrefs.get(threadId)?.off) await watch(threadId);   // Calm off here: no step counting
+      const projectId = await projectOf(threadId);
       // Read everything now, after the awaits, so nothing older than an event that arrived meanwhile goes out.
-      return { mood: moods.get(threadId) ?? baseMood(threadId), steps: steps.get(threadId) ?? 0, crew: crewOf(threadId) };
+      return { mood: moods.get(threadId) ?? baseMood(threadId), steps: steps.get(threadId) ?? 0, crew: crewOf(threadId), projectId };
     },
     watch: async ({ threadId }) => {
       await seedCrew(threadId).catch(() => {});   // retries a crew lookup that failed when the strip opened

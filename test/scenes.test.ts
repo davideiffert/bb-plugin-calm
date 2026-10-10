@@ -42,6 +42,7 @@ describe("the random mix", () => {
     for (const id of out) expect(picks.has(id)).toBe(false);
     expect(picks.size).toBe(SCENES.length - out.length);
     expect(out).not.toContain(sceneFor("thr_m", "each-thread", 0, out).id);
+    expect(out).not.toContain(sceneFor("thr_m", "each-project", 0, out, "prj_m").id);
     expect(sceneFor("thr_m", "sea", 0, out).id).toBe("sea");   // a chosen scene always shows
   });
 
@@ -65,6 +66,16 @@ describe("sceneFor", () => {
     expect(pick("thr_abc123")).toBe(pick("thr_abc123"));
     const seen = new Set(Array.from({ length: 400 }, (_, i) => pick(`thr_${i}x`)));
     expect(seen.size).toBe(SCENES.length);
+  });
+  it("keeps one scene per project, shared by all its threads", () => {
+    const pick = (thread: string, project: string | null) => sceneFor(thread, "each-project", 0, [], project).id;
+    expect(pick("thr_a", "prj_1")).toBe(pick("thr_b", "prj_1"));
+    expect(pick("thr_a", "prj_1")).toBe(pick("thr_a", "prj_1"));
+    const seen = new Set(Array.from({ length: 400 }, (_, i) => pick("thr_a", `prj_${i}x`)));
+    expect(seen.size).toBe(SCENES.length);
+    // Until the project is known, the thread stands in, so the strip still draws from the mix.
+    expect(pick("thr_a", null)).toBe(sceneFor("thr_a", "each-thread").id);
+    expect(cleanPrefs({ scene: "each-project" }).scene).toBe("each-project");
   });
 });
 

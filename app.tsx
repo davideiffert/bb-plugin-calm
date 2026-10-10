@@ -35,7 +35,8 @@ const WATCH_RENEW_MS = 5 * 60_000;    // the server stops counting a thread's st
 /** A "working" strip whose composer says nothing is running for this long has missed its run-ended event. */
 const MISSED_END_MS = 10_000;
 
-interface ThreadState { mood: Mood; steps: number; crew: CrewMember[] }
+/** `projectId` is undefined until the first state read answers, and null if bb did not say. */
+interface ThreadState { mood: Mood; steps: number; crew: CrewMember[]; projectId?: string | null }
 
 /** The thread's mood, steps, and crew: fetched on open and on reconnect, then kept live. */
 function useThreadState(threadId: string): ThreadState {
@@ -50,7 +51,7 @@ function useThreadState(threadId: string): ThreadState {
     rpc.call("state_get", { threadId }).then((s) => {
       if (!live) return;
       const f = fresher.current;
-      setState((p) => ({ mood: f.mood ? p.mood : s.mood, crew: f.crew ? p.crew : s.crew, steps: f.steps ? p.steps : s.steps }));
+      setState((p) => ({ mood: f.mood ? p.mood : s.mood, crew: f.crew ? p.crew : s.crew, steps: f.steps ? p.steps : s.steps, projectId: s.projectId ?? p.projectId ?? null }));
     }, () => {});
     // Keep the server counting this thread's steps while the strip is open.
     const renew = setInterval(() => {
@@ -220,13 +221,16 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
   const wrapRef = useRef<HTMLDivElement>(null);
   const skyRef = useRef<HTMLDivElement>(null);
   const clipRef = useRef<HTMLDivElement>(null);
-  const visible = (mood.kind !== "idle" || always) && !threadPrefs.off;
+  const choice = threadPrefs.scene ?? prefs.scene;
+  // "One scene per project" waits for the project, so the strip never opens
+  // on the thread's own scene and then swaps.
+  const waiting = choice === "each-project" && state.projectId === undefined;
+  const visible = (mood.kind !== "idle" || always) && !threadPrefs.off && !waiting;
   // Mounted while visible or closing; open drives the height ease.
   const [mounted, setMounted] = useState(visible);
   // With "a new one each time", the run number picks the scene. The strip
   // keeps the scene it opened with until it has fully closed.
   const lock = useRef<SceneLock | null>(null);
-  const choice = threadPrefs.scene ?? prefs.scene;
   // Shown always with "a new one each time", an idle strip moves to the next
   // scene from the mix every few minutes of the page being in view. Never
   // during a run, and never for a fixed scene, a thread's own scene, or a pin.
@@ -254,7 +258,10 @@ function Strip({ threadId, isRunning }: { threadId: string; isRunning: boolean }
   // has never run starts on the first run's scene.
   const turns = idleTurns(threadId);
   const place = Math.max(1, own.run ?? 0) + turns;
-  lock.current = lockScene(lock.current, sceneFor(threadId, choice, place, prefs.excluded), `${choice}:${turns}`, mounted, own);
+  // "One scene per project" hashes the project id from the first state read;
+  // if bb did not say, the thread stands in.
+  const projectId = choice === "each-project" ? state.projectId ?? null : null;
+  lock.current = lockScene(lock.current, sceneFor(threadId, choice, place, prefs.excluded, projectId), `${choice}:${turns}:${projectId ?? ""}`, mounted, own);
   const kind = lock.current.scene;
   motionRef.current.reduced = reduced;
   const dusk = prefs.evening;
