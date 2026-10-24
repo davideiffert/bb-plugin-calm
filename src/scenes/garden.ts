@@ -92,6 +92,10 @@ const GARDENER = {
   ],
 } satisfies Record<string, Sprite>;
 const GARDENER_W = 8;
+
+/** Stand left of a flower that is to the gardener's right (facing it), else right of it. */
+const sideFor = (s: { x: number; flowers: { x: number }[] }, target: number): 1 | -1 =>
+  (s.flowers[target]?.x ?? s.x) >= s.x + GARDENER_W / 2 ? 1 : -1;
 const BUD: Sprite = [".q.", ".q.", ".e.", "le.", ".e."];
 const BLOOM: Sprite = [".p.", "pyp", ".p.", "le.", ".e."];
 const SUNFLOWER: Sprite = [".yyy.", "yynyy", ".yyy.", "..e..", ".le..", "..el.", "..e..", "..e.."];
@@ -130,6 +134,11 @@ interface State {
   dir: 1 | -1;
   /** The flower the gardener is heading for, and how long it has watered there. */
   target: number;
+  /** Which side of that flower to stand on, fixed when the flower is picked
+   *  (1: left of it, facing right). Deriving it from the walking direction
+   *  made the stand spot jump sides each frame when the gardener was close,
+   *  so he flickered left-right in place and never arrived. */
+  side: 1 | -1;
   watering: number;
   flowers: Flower[];
   benchX: number;
@@ -185,7 +194,7 @@ const alert: AlertSpec = {
 export const garden = defineScene<State, Bee>({
   id: "garden",
   name: "Garden",
-  state: () => ({ x: 30, dir: 1, target: 0, watering: 0, flowers: [], benchX: 4, hedgehog: null }),
+  state: () => ({ x: 30, dir: 1, target: 0, side: 1, watering: 0, flowers: [], benchX: 4, hedgehog: null }),
 
   layout(s, k) {
     const W = k.W;
@@ -201,6 +210,7 @@ export const garden = defineScene<State, Bee>({
     s.target = Math.floor(Math.random() * s.flowers.length);
     s.x = Math.max(12, Math.min(k.W - GARDENER_W - 12, s.flowers[s.target].x + (Math.random() < 0.5 ? -24 : 24)));
     s.dir = s.flowers[s.target].x > s.x ? 1 : -1;
+    s.side = sideFor(s, s.target);
     s.watering = 0;
     if (k.mood.kind === "working") bloom(s);
   },
@@ -247,13 +257,15 @@ export const garden = defineScene<State, Bee>({
       // A gag holds the gardener still.
     } else if (mk === "working") {
       const goal = s.flowers[s.target]?.x ?? s.x;
-      const stand = goal - (s.dir > 0 ? GARDENER_W + 1 : -3);
+      const stand = Math.max(0, Math.min(k.W - GARDENER_W, goal - (s.side > 0 ? GARDENER_W + 1 : -3)));
       const dx = stand - s.x;
       if (Math.abs(dx) > 0.5 && s.watering === 0) {
         s.dir = dx > 0 ? 1 : -1;
         s.x += s.dir * Math.min(Math.abs(dx), SPEED.walk * 0.8 * dt);
       } else {
-        // Arrived: water for a moment, then move on to another flower.
+        // Arrived: face the flower, water for a moment, then move on.
+        s.x = stand;
+        s.dir = s.side;
         s.watering += dt;
         if (s.watering > WATER_SECONDS) {
           s.watering = 0;
@@ -261,6 +273,7 @@ export const garden = defineScene<State, Bee>({
           while (next === s.target && s.flowers.length > 1) next = Math.floor(Math.random() * s.flowers.length);
           s.target = next;
           s.dir = s.flowers[next].x > s.x ? 1 : -1;
+          s.side = sideFor(s, next);
         }
       }
     }
