@@ -1,11 +1,14 @@
 # Changelog
 
-## Unreleased
+## 1.3.0 (2026-10-24)
 
 - New **One scene per project** choice beside **One scene per thread**. Each
   project draws one scene from the mix, and every thread in that project shows
   it. The strip learns the project from the thread's record on open, and
   waits for it before showing a scene.
+- Garden: the gardener no longer gets stuck flickering left and right beside
+  a flower. He picks which side of the flower to stand on once, walks there,
+  and faces the flower while he waters.
 
 ## 1.2.0 (2026-10-08)
 
